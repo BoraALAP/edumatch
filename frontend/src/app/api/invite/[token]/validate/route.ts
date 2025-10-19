@@ -4,9 +4,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role';
 
 export async function GET(
   _request: Request,
-  context: { params: { token: string } }
+  context: { params: Promise<{ token: string }> }
 ) {
-  const { token } = context.params;
+  const { token } = await context.params;
 
   if (!token) {
     return NextResponse.json({ error: 'Token is required' }, { status: 400 });
