@@ -46,6 +46,8 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
+  const isAdminUser = profile.role === 'school_admin' || profile.role === 'admin';
+
   const { data: matchRows } = await supabase
     .from('matches')
     .select('*')
@@ -123,13 +125,20 @@ export default async function DashboardPage() {
       {/* Header */}
       <header className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-2xl font-bold text-foreground">EduMatch Dashboard</h1>
-            <form action="/auth/signout" method="post">
-              <Button type="submit" variant="outline">
-                Sign Out
-              </Button>
-            </form>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {isAdminUser && (
+                <Button asChild variant="secondary">
+                  <Link href="/admin">Admin Panel</Link>
+                </Button>
+              )}
+              <form action="/auth/signout" method="post">
+                <Button type="submit" variant="outline">
+                  Sign Out
+                </Button>
+              </form>
+            </div>
           </div>
         </div>
       </header>

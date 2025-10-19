@@ -408,10 +408,14 @@ export type Database = {
       }
       schools: {
         Row: {
+          admin_email: string | null
+          admin_name: string | null
           country: string | null
           created_at: string | null
           domain: string | null
           id: string
+          invitation_settings: Json
+          is_active: boolean
           max_students: number | null
           name: string
           settings: Json | null
@@ -420,10 +424,14 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          admin_email?: string | null
+          admin_name?: string | null
           country?: string | null
           created_at?: string | null
           domain?: string | null
           id?: string
+          invitation_settings?: Json
+          is_active?: boolean
           max_students?: number | null
           name: string
           settings?: Json | null
@@ -432,10 +440,14 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          admin_email?: string | null
+          admin_name?: string | null
           country?: string | null
           created_at?: string | null
           domain?: string | null
           id?: string
+          invitation_settings?: Json
+          is_active?: boolean
           max_students?: number | null
           name?: string
           settings?: Json | null
@@ -542,6 +554,59 @@ export type Database = {
           },
         ]
       }
+      student_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string
+          metadata: Json | null
+          role: Database["public"]["Enums"]["user_role"] | null
+          school_id: string
+          status: string
+          token: string
+          updated_at: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by: string
+          metadata?: Json | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          school_id: string
+          status?: string
+          token: string
+          updated_at?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          metadata?: Json | null
+          role?: Database["public"]["Enums"]["user_role"] | null
+          school_id?: string
+          status?: string
+          token?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_invitations_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -557,6 +622,10 @@ export type Database = {
       mark_messages_as_read: {
         Args: { p_match_id: string; p_user_id: string }
         Returns: undefined
+      }
+      validate_match_school: {
+        Args: { match_school: string; student1: string; student2: string }
+        Returns: boolean
       }
     }
     Enums: {
