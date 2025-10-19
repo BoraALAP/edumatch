@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/service-role';
 import type { InvitationSettings } from '@/types/schools';
-import type { TablesUpdate } from '@/types/database.types';
+import type { Json, TablesUpdate } from '@/types/database.types';
 
 export async function POST(
   _request: Request,
@@ -93,8 +93,9 @@ export async function POST(
 
   const invitationSettings = (invitation.school?.invitation_settings ?? {}) as InvitationSettings;
   const defaultStudentSettings = invitationSettings.default_student_settings ?? {};
-  const existingSettings = (profile.settings as Record<string, unknown> | null) ?? {};
-  const mergedSettings = Object.keys(defaultStudentSettings).length
+  type SettingsRecord = Record<string, unknown>;
+  const existingSettings = (profile.settings as SettingsRecord | null) ?? {};
+  const mergedSettings: SettingsRecord = Object.keys(defaultStudentSettings).length
     ? { ...defaultStudentSettings, ...existingSettings }
     : existingSettings;
 
@@ -104,7 +105,7 @@ export async function POST(
   };
 
   if (Object.keys(mergedSettings).length > 0) {
-    updatePayload.settings = mergedSettings;
+    updatePayload.settings = mergedSettings as Json;
   }
 
   const { error: updateProfileError, data: updatedProfile } = await supabase
