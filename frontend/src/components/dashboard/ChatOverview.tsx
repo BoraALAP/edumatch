@@ -72,8 +72,8 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
             });
 
             if (counts) {
-              const newUnreadMap = new Map(
-                counts.map((item: { match_id: string; unread_count: string }) => [
+              const newUnreadMap = new Map<string, number>(
+                (counts as Array<{ match_id: string; unread_count: string | number }>).map((item) => [
                   item.match_id,
                   Number(item.unread_count),
                 ])
