@@ -227,27 +227,29 @@ aiService.registerProvider('openai', provider);
 ### Conversation Agent (Already Updated)
 
 ```typescript
-// lib/agents/conversation-agent.ts
 import { aiService } from '@/lib/ai';
 
-export async function runConversationAgent(context: ConversationContext) {
-  const feedback = await aiService.monitorConversation(context);
-  return feedback.shouldInterject ? feedback.message : 'OK';
+const feedback = await aiService.monitorConversation(context);
+
+if (feedback.shouldInterject) {
+  // use feedback.message, feedbackType, severity, etc.
 }
 ```
 
 ### API Route (Already Compatible)
 
 ```typescript
-// app/api/chat/ai-moderate/route.ts
-import { runConversationAgent } from '@/lib/agents/conversation-agent';
+import { aiService } from '@/lib/ai';
 
-// This still works! No changes needed.
-const aiResponse = await runConversationAgent({
+const feedback = await aiService.monitorConversation({
   topic,
   recentMessages,
   latestMessage: message,
 });
+
+if (feedback.shouldInterject) {
+  // stream or persist `feedback.message`
+}
 ```
 
 ## Benefits

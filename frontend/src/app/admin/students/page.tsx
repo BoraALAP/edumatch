@@ -1,8 +1,20 @@
+/**
+ * Students Page - School Admin
+ *
+ * Displays roster of all school members with filtering and seat management.
+ * Features:
+ * - Filter by role (student, teacher, all)
+ * - Filter by seat type (regular, graduate, all)
+ * - Display seat information
+ * - Mark students as graduates
+ * - View onboarding and activity status
+ */
+
 import { redirect } from 'next/navigation';
 
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/server';
+import StudentRosterClient from './StudentRosterClient';
 
 export default async function StudentsPage() {
   const supabase = await createClient();
@@ -32,9 +44,16 @@ export default async function StudentsPage() {
     );
   }
 
+  // Get school information for seat tracking
+  const { data: school } = await supabase
+    .from('schools')
+    .select('name, seats_total, seats_regular_used, seats_graduate_used')
+    .eq('id', profile.school_id)
+    .single();
+
   const { data: students } = await supabase
     .from('profiles')
-    .select('id, full_name, display_name, role, onboarding_completed, last_active_at, created_at')
+    .select('id, full_name, display_name, role, seat_type, onboarding_completed, last_active_at, created_at, proficiency_level')
     .eq('school_id', profile.school_id)
     .order('role', { ascending: true })
     .order('full_name', { ascending: true, nullsFirst: false });
@@ -44,55 +63,52 @@ export default async function StudentsPage() {
       <div>
         <h2 className="text-2xl font-semibold text-foreground">Students & Teachers</h2>
         <p className="text-sm text-muted-foreground">
-          Review onboarding status and last activity for members of your school.
+          Manage school members, track seats, and mark students as graduates.
         </p>
       </div>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-border text-sm">
-            <thead className="bg-muted/40">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Onboarding</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Active</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Joined</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {(students ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                    No members found yet.
-                  </td>
-                </tr>
-              )}
-              {(students ?? []).map((student) => (
-                <tr key={student.id}>
-                  <td className="px-4 py-3 font-medium text-foreground">
-                    {student.display_name ?? student.full_name ?? 'Unnamed Member'}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground capitalize">{student.role}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={student.onboarding_completed ? 'secondary' : 'outline'}>
-                      {student.onboarding_completed ? 'Completed' : 'Pending'}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {student.last_active_at
-                      ? new Date(student.last_active_at).toLocaleString()
-                      : 'No activity yet'}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {student.created_at ? new Date(student.created_at).toLocaleDateString() : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* Seat Tracking Card */}
+      {school && (
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground">{school.name}</h3>
+              <p className="text-sm text-muted-foreground">Seat Allocation</p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-foreground">
+                {school.seats_regular_used + school.seats_graduate_used} / {school.seats_total}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {school.seats_total - (school.seats_regular_used + school.seats_graduate_used)} remaining
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="bg-primary/10 p-4 rounded-lg">
+              <p className="text-sm text-muted-foreground">Regular Seats</p>
+              <p className="text-xl font-semibold text-foreground">{school.seats_regular_used}</p>
+            </div>
+            <div className="bg-secondary/10 p-4 rounded-lg">
+              <p className="text-sm text-muted-foreground">Graduate Seats</p>
+              <p className="text-xl font-semibold text-foreground">{school.seats_graduate_used}</p>
+            </div>
+          </div>
+          {/* Capacity warning */}
+          {(school.seats_regular_used + school.seats_graduate_used) / school.seats_total >= 0.8 && (
+            <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive">
+                ⚠️ {(school.seats_regular_used + school.seats_graduate_used) / school.seats_total >= 0.95
+                  ? 'Critical: Nearly at capacity!'
+                  : 'Warning: 80% capacity reached'}
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Client-side roster with filtering */}
+      <StudentRosterClient students={students || []} />
     </div>
   );
 }

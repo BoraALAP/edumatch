@@ -4,6 +4,12 @@
  * Central service for managing AI providers.
  * Provides a simple API for the application to interact with AI features
  * without knowing which provider is being used.
+ *
+ * Now uses Mastra framework as the default provider for:
+ * - Unified voice and text capabilities
+ * - Better streaming support
+ * - Multi-provider flexibility
+ * - Built-in observability
  */
 
 import type {
@@ -18,6 +24,7 @@ import type {
   AIMessage,
 } from './types';
 import { OpenAIAgentProvider } from './providers/openai-agent-provider';
+import { MastraProvider } from './providers/mastra-provider';
 
 /**
  * AI Service Class
@@ -27,10 +34,13 @@ import { OpenAIAgentProvider } from './providers/openai-agent-provider';
  */
 class AIService {
   private providers: Map<AIProviderType, AIProvider> = new Map();
-  private defaultProvider: AIProviderType = 'openai';
+  private defaultProvider: AIProviderType = 'mastra';
 
   constructor() {
-    // Initialize with OpenAI Agent provider as default
+    // Initialize with Mastra as default provider
+    this.registerProvider('mastra', new MastraProvider());
+
+    // Keep OpenAI Agent provider available for fallback
     this.registerProvider('openai', new OpenAIAgentProvider());
   }
 

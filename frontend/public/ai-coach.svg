@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="aiCoachGradient" x1="7" y1="6" x2="25" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366F1" />
+      <stop offset="1" stop-color="#0EA5E9" />
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="24" height="22" rx="11" fill="url(#aiCoachGradient)" />
+  <path
+    d="M10.5 14.75C10.5 12.6789 12.1789 11 14.25 11H17.75C19.8211 11 21.5 12.6789 21.5 14.75C21.5 16.8211 19.8211 18.5 17.75 18.5H16.2C15.8667 18.5 15.5436 18.6308 15.316 18.8641L13.25 21L13.75 18.5H14.25C12.1789 18.5 10.5 16.8211 10.5 14.75Z"
+    fill="#F8FAFC"
+    opacity="0.92"
+  />
+  <circle cx="23.5" cy="10.5" r="2.8" fill="#F97316" opacity="0.85" />
+  <path
+    d="M24.6 8.8L24.24 9.88L23.16 10.24L24.24 10.6L24.6 11.68L24.96 10.6L26.04 10.24L24.96 9.88L24.6 8.8Z"
+    fill="#FDE68A"
+  />
+</svg>

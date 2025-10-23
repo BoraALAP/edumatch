@@ -1,8 +1,9 @@
 /**
  * Onboarding Form Component
  *
- * Multi-step form for user onboarding.
- * Steps: 1) Language Level, 2) Interests, 3) Bio & Age
+ * Multi-step form for individual user onboarding.
+ * Steps: 1) Language Level, 2) Interests, 3) Learning Goals, 4) Bio & Age
+ * Automatically sets user role to 'individual' upon completion.
  * Uses client-side state management and Supabase client for updates.
  */
 
@@ -44,6 +45,21 @@ const INTERESTS = [
   '📸 Photography',
 ];
 
+const LEARNING_GOALS = [
+  'Improve conversational fluency',
+  'Prepare for exams (TOEFL, IELTS, etc.)',
+  'Practice for job interviews',
+  'Learn business English',
+  'Improve pronunciation',
+  'Expand vocabulary',
+  'Practice grammar',
+  'Make international friends',
+  'Travel preparation',
+  'Academic writing',
+  'Casual conversation practice',
+  'Professional development',
+];
+
 interface OnboardingFormProps {
   userId: string;
 }
@@ -58,6 +74,7 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
   // Form data
   const [proficiencyLevel, setProficiencyLevel] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [learningGoals, setLearningGoals] = useState<string[]>([]);
   const [bio, setBio] = useState('');
   const [age, setAge] = useState('');
 
@@ -71,6 +88,16 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
     }
   };
 
+  const toggleLearningGoal = (goal: string) => {
+    if (learningGoals.includes(goal)) {
+      setLearningGoals(learningGoals.filter((g) => g !== goal));
+    } else {
+      if (learningGoals.length < 3) {
+        setLearningGoals([...learningGoals, goal]);
+      }
+    }
+  };
+
   const handleNext = () => {
     if (step === 1 && !proficiencyLevel) {
       alert('Please select your language level');
@@ -78,6 +105,10 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
     }
     if (step === 2 && selectedInterests.length < 3) {
       alert('Please select at least 3 interests');
+      return;
+    }
+    if (step === 3 && learningGoals.length < 1) {
+      alert('Please select at least 1 learning goal');
       return;
     }
     setStep(step + 1);
@@ -107,8 +138,10 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
           id: userId,
           proficiency_level: proficiencyLevel,
           interests: selectedInterests,
+          learning_goals: learningGoals,
           bio: bio.trim(),
           age: parseInt(age),
+          role: 'individual', // Set role as individual for self-signup
           onboarding_completed: true,
           updated_at: new Date().toISOString(),
         }, {
@@ -137,20 +170,26 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
             1
           </div>
-          <div className="w-16 h-1 bg-muted">
+          <div className="w-12 h-1 bg-muted">
             <div className={`h-full ${step >= 2 ? 'bg-primary' : 'bg-muted'}`} />
           </div>
           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
             2
           </div>
-          <div className="w-16 h-1 bg-muted">
+          <div className="w-12 h-1 bg-muted">
             <div className={`h-full ${step >= 3 ? 'bg-primary' : 'bg-muted'}`} />
           </div>
           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
             3
           </div>
+          <div className="w-12 h-1 bg-muted">
+            <div className={`h-full ${step >= 4 ? 'bg-primary' : 'bg-muted'}`} />
+          </div>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 4 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+            4
+          </div>
         </div>
-        <span className="text-sm text-muted-foreground">Step {step} of 3</span>
+        <span className="text-sm text-muted-foreground">Step {step} of 4</span>
       </div>
 
       {/* Step 1: Language Level */}
@@ -235,8 +274,48 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
         </div>
       )}
 
-      {/* Step 3: Bio & Age */}
+      {/* Step 3: Learning Goals */}
       {step === 3 && (
+        <div>
+          <h2 className="text-2xl font-bold text-foreground mb-2">What are your learning goals?</h2>
+          <p className="text-muted-foreground mb-6">
+            Select 1-3 goals to help us personalize your experience (selected: {learningGoals.length}/3)
+          </p>
+
+          <div className="grid grid-cols-1 gap-3 mb-8">
+            {LEARNING_GOALS.map((goal) => (
+              <button
+                key={goal}
+                onClick={() => toggleLearningGoal(goal)}
+                disabled={!learningGoals.includes(goal) && learningGoals.length >= 3}
+                className={`p-4 border-2 rounded-lg text-left transition-all ${
+                  learningGoals.includes(goal)
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:border-border'
+                } ${
+                  !learningGoals.includes(goal) && learningGoals.length >= 3
+                    ? 'opacity-50 cursor-not-allowed'
+                    : ''
+                }`}
+              >
+                <span className="font-medium">{goal}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex justify-between mt-8">
+            <Button variant="outline" onClick={handleBack}>
+              Back
+            </Button>
+            <Button onClick={handleNext} disabled={learningGoals.length < 1}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Bio & Age */}
+      {step === 4 && (
         <div>
           <h2 className="text-2xl font-bold text-foreground mb-2">Tell us about yourself</h2>
           <p className="text-muted-foreground mb-6">Help others get to know you better</p>
@@ -284,6 +363,16 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
                     {selectedInterests.map((interest) => (
                       <Badge key={interest} variant="secondary">
                         {interest}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-medium">Learning Goals:</span>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {learningGoals.map((goal) => (
+                      <Badge key={goal} variant="secondary">
+                        {goal}
                       </Badge>
                     ))}
                   </div>

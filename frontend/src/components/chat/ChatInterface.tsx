@@ -8,14 +8,60 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
 import type { Profile, Message, Match, CurriculumTopic } from '@/types';
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from '@/components/ai-elements/conversation';
+import { Message as ChatMessageItem, MessageContent, MessageAvatar } from '@/components/ai-elements/message';
+import {
+  PromptInputProvider,
+  PromptInput,
+  PromptInputBody,
+  PromptInputTextarea,
+  PromptInputFooter,
+  PromptInputSubmit,
+  type PromptInputMessage,
+  usePromptInputController,
+} from '@/components/ai-elements/prompt-input';
+import { Loader } from '@/components/ai-elements/loader';
+import { Response } from '@/components/ai-elements/response';
+import { cn } from '@/lib/utils';
+import { Loader2Icon, MessageSquareIcon, SendIcon } from 'lucide-react';
+
+const formatTimestamp = (value?: string | Date | null): string => {
+  if (!value) {
+    return 'Just now';
+  }
+
+  const date = typeof value === 'string' ? new Date(value) : value;
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Just now';
+  }
+
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const createMessageKey = (message: Message): string => {
+  if (message.id !== undefined && message.id !== null) {
+    return String(message.id);
+  }
+
+  const timestamp = message.created_at ?? 'na';
+  return `${message.sender_type ?? 'user'}-${message.content}-${timestamp}`;
+};
+
+const isAIMessage = (message: Message): boolean => {
+  return (message.sender_type ?? '').startsWith('ai');
+};
 
 type MatchWithDetails = Match & {
   curriculum_topic: CurriculumTopic | null;
@@ -37,12 +83,58 @@ export default function ChatInterface({
   match,
 }: ChatInterfaceProps) {
   const supabase = createClient();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const sortedMessages = useMemo(() => {
+    return [...messages].sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return aTime - bTime;
+    });
+  }, [messages]);
+
+  const conversationItems = useMemo(
+    () =>
+      sortedMessages.map((message) => {
+        const isCurrentUser = message.sender_id === currentUserId;
+        const aiMessage = isAIMessage(message);
+        const role: 'assistant' | 'user' = isCurrentUser ? 'user' : 'assistant';
+
+        const avatarSrc = aiMessage
+          ? '/ai-coach.svg'
+          : isCurrentUser
+          ? currentUserProfile?.avatar_url ?? ''
+          : otherUser.avatar_url ?? '';
+
+        const avatarName = aiMessage
+          ? 'AI'
+          : isCurrentUser
+          ? currentUserProfile?.display_name || currentUserProfile?.full_name || 'You'
+          : otherUser.display_name || otherUser.full_name || 'Partner';
+
+        const isCorrection =
+          aiMessage &&
+          (message.sender_type === 'ai_correction' || message.message_type === 'correction');
+
+        return {
+          key: createMessageKey(message),
+          role,
+          content: message.content ?? '',
+          timestamp: formatTimestamp(message.created_at),
+          avatarSrc,
+          avatarName,
+          isCurrentUser,
+          isAI: aiMessage,
+          isCorrection,
+        };
+      }),
+    [sortedMessages, currentUserId, currentUserProfile, otherUser]
+  );
+
+  const visibleMessageCount = conversationItems.length;
+  const messageLabel = visibleMessageCount === 1 ? 'message' : 'messages';
 
   // Fetch initial messages
   useEffect(() => {
@@ -63,7 +155,10 @@ export default function ChatInterface({
         },
         (payload) => {
           setMessages((current) => [...current, payload.new as Message]);
-          scrollToBottom();
+
+          if ((payload.new as Message).sender_id !== currentUserId) {
+            void markMessagesAsRead();
+          }
         }
       )
       .subscribe();
@@ -72,25 +167,6 @@ export default function ChatInterface({
       supabase.removeChannel(channel);
     };
   }, [matchId]);
-
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Scroll to bottom immediately on initial load
-  useEffect(() => {
-    if (!isLoading && messages.length > 0) {
-      // Use setTimeout to ensure DOM is ready
-      setTimeout(() => {
-        scrollToBottom('auto');
-      }, 100);
-    }
-  }, [isLoading]);
-
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  };
 
   const fetchMessages = async () => {
     setIsLoading(true);
@@ -126,14 +202,20 @@ export default function ChatInterface({
     }
   };
 
-  const submitMessage = async () => {
-    const trimmedMessage = newMessage.trim();
-    if (!trimmedMessage || isSending) return;
+  const handlePromptSubmit = async ({ text }: PromptInputMessage) => {
+    const trimmedMessage = text?.trim();
+
+    if (!trimmedMessage) {
+      throw new Error('EMPTY_MESSAGE');
+    }
+
+    if (isSending) {
+      throw new Error('SEND_IN_PROGRESS');
+    }
 
     setIsSending(true);
 
     try {
-      // Send message to database
       const { error } = await supabase.from('messages').insert({
         match_id: matchId,
         sender_id: currentUserId,
@@ -144,11 +226,7 @@ export default function ChatInterface({
 
       if (error) throw error;
 
-      // Clear input
-      setNewMessage('');
-
-      // Send to AI moderation (async, don't wait)
-      fetch('/api/chat/ai-moderate', {
+      void fetch('/api/chat/ai-moderate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -160,182 +238,172 @@ export default function ChatInterface({
     } catch (error) {
       console.error('Error sending message:', error);
       alert('Failed to send message. Please try again.');
+      throw error;
     } finally {
       setIsSending(false);
     }
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    await submitMessage();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void submitMessage();
-    }
-  };
-
   return (
-    <>
-      {/* Header */}
-      <header className="bg-card border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col bg-background">
+      <header className="border-b border-border bg-card px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="text-primary hover:text-primary/90">
               ←
             </Link>
-            <Avatar className="w-10 h-10">
-              <AvatarImage
-                src={otherUser.avatar_url || undefined}
-                alt={otherUser.display_name || otherUser.full_name || 'User'}
-              />
-              <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-lg font-bold">
-                {(otherUser.display_name || otherUser.full_name || 'U')[0].toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h2 className="font-semibold text-foreground">
-                {otherUser.display_name || otherUser.full_name}
-              </h2>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-xs">
-                  {otherUser.proficiency_level}
-                </Badge>
-                <span className="text-xs text-primary flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-primary" />
-                  Active
-                </span>
+            <div className="flex items-center gap-3">
+              <Avatar className="size-10">
+                <AvatarImage
+                  src={otherUser.avatar_url || undefined}
+                  alt={otherUser.display_name || otherUser.full_name || 'Partner'}
+                />
+                <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-lg font-bold">
+                  {(otherUser.display_name || otherUser.full_name || 'U')[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="font-semibold text-foreground">
+                  {otherUser.display_name || otherUser.full_name}
+                </h2>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {match.curriculum_topic?.title && (
+                    <span>
+                      Topic: <span className="text-foreground">{match.curriculum_topic.title}</span>
+                    </span>
+                  )}
+                  {otherUser.proficiency_level && (
+                    <Badge variant="secondary" className="text-[11px]">
+                      Level {otherUser.proficiency_level}
+                    </Badge>
+                  )}
+                  {match.created_at && (
+                    <span>
+                      Matched {new Date(match.created_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-
-          {match.curriculum_topic && (
-            <Badge variant="outline" className="hidden sm:flex">
-              Topic: {match.curriculum_topic.title}
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {visibleMessageCount} {messageLabel}
             </Badge>
-          )}
+            <Badge variant="outline" className="hidden sm:inline-flex text-xs">
+              AI Assisted
+            </Badge>
+          </div>
         </div>
       </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-muted p-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-              <p className="text-sm text-muted-foreground">Loading messages...</p>
+      <Conversation className="relative flex-1 bg-muted/40">
+        <ConversationContent className="mx-auto w-full max-w-4xl">
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
+              <Loader size={18} /> Loading messages…
             </div>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
-              <div className="text-5xl mb-3">👋</div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">Start the conversation!</h3>
-              <p className="text-sm text-muted-foreground">
-                Say hello and introduce yourself. The AI will help with grammar as you chat.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4 max-w-4xl mx-auto">
-            {messages.map((message) => {
-              const isCurrentUser = message.sender_id === currentUserId;
-              const isAI = message.sender_type !== 'user';
-
-              if (isAI) {
-                return (
-                  <div key={message.id} className="flex justify-center">
-                    <div className={`max-w-lg px-4 py-2 rounded-lg text-sm ${
-                      message.sender_type === 'ai_correction'
-                        ? 'bg-accent text-accent-foreground border border-accent'
-                        : 'bg-primary/15 text-primary/95 border border-primary/30'
-                    }`}>
-                      <div className="flex items-start gap-2">
-                        <span className="text-lg">
-                          {message.sender_type === 'ai_correction' ? '✏️' : '✨'}
-                        </span>
-                        <div>
-                          <p className="font-medium text-xs mb-1">
-                            {message.sender_type === 'ai_correction' ? 'Grammar Tip' : 'AI Assistant'}
-                          </p>
-                          <p>{message.content}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={message.id} className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex gap-2 max-w-lg ${isCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <Avatar className="w-8 h-8 flex-shrink-0">
-                      <AvatarImage
-                        src={isCurrentUser ? currentUserProfile?.avatar_url || undefined : otherUser.avatar_url || undefined}
-                        alt={isCurrentUser
-                          ? currentUserProfile?.display_name || currentUserProfile?.full_name || 'You'
-                          : otherUser.display_name || otherUser.full_name || 'User'}
-                      />
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-sm font-bold">
-                        {isCurrentUser
-                          ? (currentUserProfile?.display_name || currentUserProfile?.full_name || 'Y')[0].toUpperCase()
-                          : (otherUser.display_name || otherUser.full_name || 'U')[0].toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className={`px-4 py-2 rounded-lg ${
-                        isCurrentUser
-                          ? 'bg-primary text-primary-foreground rounded-br-none'
-                          : 'bg-card text-foreground border border-border rounded-bl-none'
-                      }`}>
-                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1 px-1">
-                        {message.created_at && new Date(message.created_at).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
-      </div>
-
-      {/* Input */}
-      <div className="bg-card border-t border-border p-4">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-          <div className="flex gap-2">
-            <Textarea
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
-              disabled={isSending}
-              rows={1}
-              className="flex-1 resize-none"
+          ) : conversationItems.length === 0 ? (
+            <ConversationEmptyState
+              icon={<MessageSquareIcon className="size-6" />}
+              title="Start the conversation"
+              description="Say hello and introduce yourself. The AI coach will keep grammar on track while you chat."
             />
-            <Button type="submit" disabled={!newMessage.trim() || isSending}>
-              {isSending ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-foreground"></div>
-              ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
-              )}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            💡 The AI will provide helpful grammar corrections and keep the conversation on topic
+          ) : (
+            conversationItems.map((item) => (
+              <ChatMessageItem from={item.role} key={item.key}>
+                <div className="flex max-w-3xl flex-col gap-1">
+                  <MessageContent
+                    className={cn(
+                      'w-fit max-w-xl whitespace-pre-wrap break-words leading-relaxed text-sm',
+                      item.role === 'assistant' ? 'self-start' : 'self-end',
+                      item.isAI && item.isCorrection
+                        ? 'group-[.is-assistant]:bg-amber-100 group-[.is-assistant]:text-amber-900 dark:group-[.is-assistant]:bg-amber-200/10 dark:group-[.is-assistant]:text-amber-100'
+                        : item.isAI
+                        ? 'group-[.is-assistant]:bg-secondary/80'
+                        : ''
+                    )}
+                  >
+                    {item.isAI ? (
+                      <>
+                        <p className="mb-1 text-xs font-medium text-muted-foreground">
+                          {item.isCorrection ? 'Grammar Tip' : 'AI Assistant'}
+                        </p>
+                        <Response>{item.content}</Response>
+                      </>
+                    ) : (
+                      <p>{item.content}</p>
+                    )}
+                  </MessageContent>
+                  <span
+                    className={cn(
+                      'px-2 text-xs text-muted-foreground',
+                      item.role === 'assistant' ? 'self-start' : 'self-end'
+                    )}
+                  >
+                    {item.timestamp}
+                  </span>
+                </div>
+                <MessageAvatar
+                  className={cn(
+                    item.isAI
+                      ? 'bg-secondary text-secondary-foreground'
+                      : 'bg-card text-foreground',
+                    item.isAI && item.isCorrection
+                      ? 'ring-amber-200 dark:ring-amber-300/40'
+                      : item.isAI
+                      ? 'ring-primary/40'
+                      : 'ring-border'
+                  )}
+                  name={item.isAI ? 'AI' : item.avatarName}
+                  src={item.avatarSrc}
+                />
+              </ChatMessageItem>
+            ))
+          )}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      <div className="border-t border-border bg-card p-4">
+        <div className="mx-auto w-full max-w-4xl space-y-2">
+          <PromptInputProvider>
+            <PromptInput onSubmit={handlePromptSubmit}>
+              <PromptInputBody>
+                <PromptInputTextarea
+                  disabled={isSending}
+                  placeholder="Type your message..."
+                  rows={2}
+                />
+              </PromptInputBody>
+              <PromptInputFooter>
+                <span className="text-xs text-muted-foreground">
+                  Press Enter to send • Shift+Enter for new line
+                </span>
+                <PeerPromptSubmitButton isSending={isSending} />
+              </PromptInputFooter>
+            </PromptInput>
+          </PromptInputProvider>
+          <p className="text-xs text-muted-foreground">
+            💡 The AI coach will provide gentle corrections and nudge the conversation when needed.
           </p>
-        </form>
+        </div>
       </div>
-    </>
+    </div>
+  );
+}
+
+function PeerPromptSubmitButton({ isSending }: { isSending: boolean }) {
+  const { textInput } = usePromptInputController();
+  const isDisabled = isSending || !textInput.value.trim();
+
+  return (
+    <PromptInputSubmit disabled={isDisabled}>
+      {isSending ? (
+        <Loader2Icon className="size-4 animate-spin" />
+      ) : (
+        <SendIcon className="size-4" />
+      )}
+    </PromptInputSubmit>
   );
 }

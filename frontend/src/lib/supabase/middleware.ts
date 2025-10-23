@@ -3,6 +3,12 @@
  *
  * This file provides middleware utilities for refreshing Supabase auth sessions.
  * Used in middleware.ts to maintain authentication state.
+ *
+ * Role-based routing:
+ * - Individual users → /dashboard
+ * - School admins → /admin (first visit shows onboarding wizard)
+ * - School students/teachers → /dashboard (school-scoped)
+ * - Protects admin routes from non-admin access
  */
 
 import { createServerClient } from '@supabase/ssr';
@@ -45,7 +51,11 @@ export async function updateSession(request: NextRequest) {
 
   // Define protected routes
   const protectedRoutes = ['/dashboard', '/chat', '/matches', '/profile'];
+  const adminRoutes = ['/admin'];
   const isProtectedRoute = protectedRoutes.some((route) =>
+    request.nextUrl.pathname.startsWith(route)
+  );
+  const isAdminRoute = adminRoutes.some((route) =>
     request.nextUrl.pathname.startsWith(route)
   );
 
@@ -56,18 +66,47 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Redirect to login if accessing protected route without authentication
-  if (!user && isProtectedRoute) {
+  if (!user && (isProtectedRoute || isAdminRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirect_to', request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 
-  // Redirect to dashboard if accessing auth routes while logged in
+  // Role-based routing for authenticated users
   if (user && isAuthRoute) {
+    // Get user profile to determine role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, school_id, onboarding_completed')
+      .eq('id', user.id)
+      .maybeSingle();
+
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+
+    // Redirect based on role
+    if (profile?.role === 'school_admin') {
+      url.pathname = '/admin';
+    } else {
+      url.pathname = '/dashboard';
+    }
+
     return NextResponse.redirect(url);
+  }
+
+  // Protect admin routes - only school_admin and admin can access
+  if (user && isAdminRoute) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profile?.role !== 'school_admin' && profile?.role !== 'admin') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're

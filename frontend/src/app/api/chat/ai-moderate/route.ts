@@ -6,12 +6,12 @@
  * - Topic redirection when conversation drifts
  * - Encouraging feedback
  *
- * Uses OpenAI GPT to analyze messages and interject when needed.
+ * Powered by Mastra via the shared aiService abstraction to keep providers swappable.
  */
 
 import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { runConversationAgent } from '@/lib/agents/conversation-agent';
+import { aiService } from '@/lib/ai';
 
 // Cooldown to prevent AI from being too intrusive (30 seconds)
 const AI_COOLDOWN_MS = 30000;
@@ -42,22 +42,21 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
-    // Run the conversation agent with context
-    const aiResponse = await runConversationAgent({
+    // Run the conversation agent with context via Mastra provider
+    const feedback = await aiService.monitorConversation({
       topic,
       recentMessages,
       latestMessage: message,
     });
 
     // Only interject if AI has something to say (not just "OK")
-    if (aiResponse && aiResponse !== 'OK' && aiResponse.length > 3) {
-      // Determine the type of interjection
-      const isGrammarCorrection = aiResponse.toLowerCase().includes('grammar') ||
-                                   aiResponse.toLowerCase().includes('should be') ||
-                                   aiResponse.toLowerCase().includes('correction');
+    if (feedback.shouldInterject && feedback.message && feedback.message.length > 3) {
+      const aiResponse = feedback.message;
 
-      const messageType = isGrammarCorrection ? 'correction' : 'feedback';
-      const senderType = isGrammarCorrection ? 'ai_correction' : 'ai_system';
+      // Determine sender/message type from structured feedback
+      const messageType = feedback.feedbackType === 'grammar' ? 'correction' : 'feedback';
+      const senderType =
+        feedback.feedbackType === 'grammar' ? 'ai_correction' : 'ai_system';
 
       // Update cooldown
       lastAIInterjection.set(matchId, now);
@@ -83,14 +82,6 @@ export async function POST(request: NextRequest) {
           }
 
           // Insert the complete message in database
-          console.log('Inserting AI message:', {
-            match_id: matchId,
-            sender_type: senderType,
-            content: aiResponse,
-            content_length: aiResponse.length,
-            message_type: messageType,
-          });
-
           const { data: messageData, error: insertError } = await supabase
             .from('messages')
             .insert({
@@ -113,7 +104,9 @@ export async function POST(request: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
             type: 'done',
             messageId: messageData?.id,
-            fullContent: aiResponse
+            fullContent: aiResponse,
+            feedbackType: feedback.feedbackType,
+            severity: feedback.severity,
           })}\n\n`));
 
           controller.close();
@@ -135,7 +128,8 @@ export async function POST(request: NextRequest) {
       start(controller) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({
           type: 'no_action',
-          reason: 'no_issues_found'
+          reason: 'no_issues_found',
+          feedbackType: feedback.feedbackType ?? null
         })}\n\n`));
         controller.close();
       }

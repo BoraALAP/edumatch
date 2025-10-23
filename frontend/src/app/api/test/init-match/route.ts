@@ -11,7 +11,7 @@ const MATCH_ID = '00000000-0000-0000-0000-000000000100';
 const TOPIC_ID = '00000000-0000-0000-0000-000000000010';
 const SCHOOL_ID = '00000000-0000-0000-0000-000000000001';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     // We'll directly insert using SQL via service role
     // Since we don't have auth.users, we'll need to either:

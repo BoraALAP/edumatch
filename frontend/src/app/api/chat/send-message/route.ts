@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { matchId, content, senderId, senderType = 'user' } = body;
+    const { matchId, content, senderType = 'user' } = body;
 
     if (!matchId || !content) {
       return NextResponse.json(

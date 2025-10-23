@@ -11,12 +11,15 @@ import ChatInterface from '@/components/chat/ChatInterface';
 import type { Match, Profile, CurriculumTopic } from '@/types';
 
 interface ChatPageProps {
-  params: {
+  params: Promise<{
     matchId: string;
-  };
+  }>;
 }
 
 export default async function ChatPage({ params }: ChatPageProps) {
+  // Await params in Next.js 15
+  const { matchId } = await params;
+
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -29,7 +32,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const { data: matchRow, error: matchError } = await supabase
     .from('matches')
     .select('*')
-    .eq('id', params.matchId)
+    .eq('id', matchId)
     .single();
 
   if (matchError || !matchRow) {
@@ -84,7 +87,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   return (
     <div className="h-screen flex flex-col bg-background">
       <ChatInterface
-        matchId={params.matchId}
+        matchId={matchId}
         currentUserId={user.id}
         currentUserProfile={currentUserProfile}
         otherUser={otherUser}

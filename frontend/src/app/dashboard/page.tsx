@@ -35,23 +35,50 @@ export default async function DashboardPage() {
   }
 
   // Check if user completed onboarding
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
-    .maybeSingle();
+    .single();
 
-  // If no profile exists or onboarding not completed, redirect to onboarding
+  // Debug logging
+  if (profileError) {
+    console.error('Dashboard - Profile Error:', profileError);
+    console.error('Dashboard - User ID:', user.id);
+
+    // If profile doesn't exist at all, redirect to onboarding
+    if (profileError.code === 'PGRST116') {
+      redirect('/onboarding');
+    }
+
+    // For other errors, throw to show the error
+    throw new Error(`Failed to fetch profile: ${profileError.message}`);
+  }
+
+  // If no profile exists or onboarding not completed, redirect appropriately
   if (!profile || !profile.onboarding_completed) {
-    redirect('/onboarding');
+    // School admins go to school setup, others go to onboarding
+    if (profile?.role === 'school_admin') {
+      redirect('/schools/setup');
+    } else {
+      redirect('/onboarding');
+    }
   }
 
   const isAdminUser = profile.role === 'school_admin' || profile.role === 'admin';
 
+  // Fetch peer matches
   const { data: matchRows } = await supabase
     .from('matches')
     .select('*')
     .or(`student1_id.eq.${user.id},student2_id.eq.${user.id}`)
+    .order('updated_at', { ascending: false });
+
+  // Fetch solo practice sessions
+  const { data: soloSessions } = await supabase
+    .from('solo_practice_sessions')
+    .select('*')
+    .eq('student_id', user.id)
     .order('updated_at', { ascending: false });
 
   const allMatches = matchRows ?? [];
@@ -101,40 +128,72 @@ export default async function DashboardPage() {
     (unreadCounts ?? []).map((item: { match_id: string; unread_count: string }) => [item.match_id, Number(item.unread_count)])
   );
 
-  const matchSummaries = decoratedMatches.map((match) => {
-    const partner = findOtherParticipant(match);
-    return {
-      id: match.id,
-      status: match.status as MatchStatus,
-      updated_at: match.updated_at,
-      matched_interests: match.matched_interests ?? [],
-      partner: partner
-        ? {
-          id: partner.id,
-          name: partner.display_name || partner.full_name || 'Practice Partner',
-          avatar_url: partner.avatar_url,
-          proficiency_level: partner.proficiency_level,
-        }
-        : null,
-      unread_count: unreadMap.get(match.id) ?? 0,
-    };
+  // Convert peer matches to summaries
+  const peerMatchSummaries = decoratedMatches
+    .filter(match => match.session_type !== 'solo') // Exclude old solo matches
+    .map((match) => {
+      const partner = findOtherParticipant(match);
+
+      return {
+        id: match.id,
+        status: match.status as MatchStatus,
+        updated_at: match.updated_at,
+        matched_interests: match.matched_interests ?? [],
+        partner: partner
+          ? {
+              id: partner.id,
+              name: partner.display_name || partner.full_name || 'Practice Partner',
+              avatar_url: partner.avatar_url,
+              proficiency_level: partner.proficiency_level,
+            }
+          : null,
+        unread_count: unreadMap.get(match.id) ?? 0,
+        session_type: match.session_type,
+      };
+    });
+
+  // Convert solo sessions to summaries
+  const soloSessionSummaries = (soloSessions ?? []).map((session) => ({
+    id: session.id,
+    status: (session.status === 'active' ? 'active' : session.status === 'completed' ? 'ended' : 'cancelled') as MatchStatus,
+    updated_at: session.updated_at || session.created_at,
+    matched_interests: [session.topic],
+    partner: {
+      id: 'ai-coach',
+      name: 'AI Practice Coach',
+      avatar_url: null,
+      proficiency_level: session.proficiency_level || profile.proficiency_level,
+    },
+    unread_count: 0, // Solo sessions don't have unread counts yet
+    session_type: 'solo' as const,
+  }));
+
+  // Merge peer matches and solo sessions
+  const matchSummaries = [...peerMatchSummaries, ...soloSessionSummaries].sort((a, b) => {
+    const dateA = new Date(a.updated_at || 0).getTime();
+    const dateB = new Date(b.updated_at || 0).getTime();
+    return dateB - dateA; // Most recent first
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background text-foreground">
       {/* Header */}
-      <header className="bg-card border-b border-border">
+      <header className="border-b border-border/60 bg-background/70 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-2xl font-bold text-foreground">EduMatch Dashboard</h1>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {isAdminUser && (
-                <Button asChild variant="secondary">
+                <Button asChild variant="secondary" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
                   <Link href="/admin">Admin Panel</Link>
                 </Button>
               )}
               <form action="/auth/signout" method="post">
-                <Button type="submit" variant="outline">
+                <Button
+                  type="submit"
+                  variant="outline"
+                  className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+                >
                   Sign Out
                 </Button>
               </form>
@@ -146,7 +205,7 @@ export default async function DashboardPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Welcome Card */}
-        <Card className="p-6">
+        <Card className="border border-white/10 bg-background/60 p-6 backdrop-blur">
           <div className="flex items-center gap-4">
             {user.user_metadata?.avatar_url && (
               <img
@@ -169,7 +228,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <section className="space-y-6">
             {pendingRequestCount > 0 && (
-              <Card className="border-primary/30 bg-primary/10">
+              <Card className="border border-primary/40 bg-primary/15 backdrop-blur">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-6 py-4">
                   <div>
                     <p className="text-sm font-semibold text-primary">New requests ({pendingRequestCount})</p>
@@ -177,7 +236,12 @@ export default async function DashboardPage() {
                       You have new match invitations waiting for a response.
                     </p>
                   </div>
-                  <Button asChild variant="outline" size="sm">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="border-white/20 text-white hover:bg-white/10"
+                  >
                     <Link href="/chat">See all</Link>
                   </Button>
                 </div>
@@ -194,7 +258,23 @@ export default async function DashboardPage() {
           </section>
 
           <aside className="space-y-6">
-            <Card className="p-6 bg-primary/10 border-primary/20">
+            <Card className="border border-white/10 bg-background/60 p-6 backdrop-blur">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-foreground">Practice Solo</h2>
+                <p className="text-sm text-muted-foreground">
+                  Practice conversation with your AI coach anytime, anywhere.
+                </p>
+              </div>
+              <Button
+                asChild
+                variant="secondary"
+                className="border-white/20 bg-white/10 text-white hover:bg-white/20"
+              >
+                <Link href="/practice">Start Solo Practice</Link>
+              </Button>
+            </Card>
+
+            <Card className="border border-primary/40 bg-primary/15 p-6 backdrop-blur">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Need a fresh conversation?</h2>
                 <p className="text-sm text-muted-foreground">
@@ -206,7 +286,7 @@ export default async function DashboardPage() {
               </Button>
             </Card>
 
-            <Card className="p-6">
+            <Card className="border border-white/10 bg-background/60 p-6 backdrop-blur">
               <div className="flex items-start gap-4">
                 <Avatar className="w-16 h-16">
                   <AvatarImage
@@ -248,7 +328,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="mt-6">
-                <Button asChild variant="outline">
+                <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10">
                   <Link href="/profile">Edit profile</Link>
                 </Button>
               </div>

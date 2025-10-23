@@ -26,8 +26,9 @@ interface InvitationResponse {
   };
 }
 
-export default async function InvitePage({ params }: { params: { token: string } }) {
-  const { token } = params;
+export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
+  // Await params in Next.js 15
+  const { token } = await params;
 
   const supabase = await createClient();
   const {

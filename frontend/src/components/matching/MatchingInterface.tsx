@@ -2,7 +2,10 @@
  * Matching Interface Component
  *
  * Tinder-style swipe interface for finding practice partners.
- * Fetches potential matches based on similar interests and language level.
+ * Fetches potential matches using RPC function that respects privacy boundaries:
+ * - Individuals see only other individuals (global pool)
+ * - School students see only same-school students (unless global matching enabled)
+ * - Sorts by match quality (proficiency level + shared interests)
  * Uses client-side state for swipe animations and match creation.
  */
 
@@ -49,37 +52,45 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
     setIsLoading(true);
 
     try {
-      // First, get existing matches to exclude them
-      const { data: existingMatches } = await supabase
-        .from('matches')
-        .select('student1_id, student2_id')
-        .or(`student1_id.eq.${userId},student2_id.eq.${userId}`);
-
-      // Create a set of user IDs to exclude (already matched)
-      const excludedIds = new Set<string>();
-      if (existingMatches) {
-        existingMatches.forEach((match) => {
-          if (match.student1_id !== userId) excludedIds.add(match.student1_id);
-          if (match.student2_id !== userId) excludedIds.add(match.student2_id);
-        });
-      }
-
-      // Get users with similar proficiency level and interests
+      // Use RPC function that respects privacy boundaries
+      // Returns only profiles the user can match with (individuals or same school)
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('onboarding_completed', true)
-        .neq('id', userId)
-        .limit(50);
+        .rpc('rpc_get_my_matching_pool');
 
       if (error) throw error;
 
       if (data) {
-        // Filter out already matched users
-        const filtered = data.filter(profile => !excludedIds.has(profile.id));
+        // Get existing matches to exclude them
+        const { data: existingMatches } = await supabase
+          .from('matches')
+          .select('student1_id, student2_id')
+          .or(`student1_id.eq.${userId},student2_id.eq.${userId}`);
+
+        // Create a set of user IDs to exclude (already matched)
+        const excludedIds = new Set<string>();
+        if (existingMatches) {
+          existingMatches.forEach((match) => {
+            if (match.student1_id !== userId) excludedIds.add(match.student1_id);
+            if (match.student2_id !== userId && match.student2_id) excludedIds.add(match.student2_id);
+          });
+        }
+
+        // Filter out already matched users and map to Profile type
+        const filtered = data
+          .filter((profile: any) => !excludedIds.has(profile.profile_id))
+          .map((profile: any) => ({
+            id: profile.profile_id,
+            display_name: profile.display_name,
+            full_name: profile.display_name, // Use display_name as fallback
+            proficiency_level: profile.proficiency_level,
+            interests: profile.interests,
+            bio: profile.bio,
+            age: null, // Not included in RPC response
+            avatar_url: null, // Not included in RPC response
+          }));
 
         // Sort by match quality (same level + shared interests)
-        const sorted = filtered.sort((a, b) => {
+        const sorted = filtered.sort((a: any, b: any) => {
           const aScore = calculateMatchScore(a);
           const bScore = calculateMatchScore(b);
           return bScore - aScore;

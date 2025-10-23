@@ -22,6 +22,7 @@ export type ChatSummary = {
   matched_interests: string[];
   partner: PartnerSummary | null;
   unread_count?: number;
+  session_type?: string;
 };
 
 interface ChatOverviewProps {
@@ -160,13 +161,19 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
             return (
               <li key={match.id}>
                 <Link
-                  href={`/chat/${match.id}`}
+                  href={match.session_type === 'solo' ? `/practice/${match.id}` : `/chat/${match.id}`}
                   className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted ${
                     hasUnread ? 'bg-primary/10' : ''
                   }`}
                 >
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-lg font-semibold">
-                  {match.partner?.avatar_url ? (
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold ${
+                  match.session_type === 'solo'
+                    ? 'bg-gradient-to-br from-purple-500 to-pink-500 text-white'
+                    : 'bg-gradient-to-br from-primary to-secondary text-primary-foreground'
+                }`}>
+                  {match.session_type === 'solo' ? (
+                    <span className="text-2xl">🤖</span>
+                  ) : match.partner?.avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={match.partner.avatar_url}
@@ -183,6 +190,11 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
                     <p className="font-medium text-foreground truncate">
                       {match.partner?.name || 'Conversation'}
                     </p>
+                    {match.session_type === 'solo' && (
+                      <Badge variant="default" className="text-xs bg-purple-500">
+                        Solo Practice
+                      </Badge>
+                    )}
                     {match.partner?.proficiency_level && (
                       <Badge variant="secondary" className="text-xs">
                         {match.partner.proficiency_level}
@@ -193,8 +205,8 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
                     <span>Updated {formatDate(match.updated_at)}</span>
                     {match.matched_interests.length > 0 && (
                       <span>
-                        {match.matched_interests.length} shared interest
-                        {match.matched_interests.length > 1 ? 's' : ''}
+                        {match.matched_interests[0]}
+                        {match.matched_interests.length > 1 && ` +${match.matched_interests.length - 1} more`}
                       </span>
                     )}
                   </div>

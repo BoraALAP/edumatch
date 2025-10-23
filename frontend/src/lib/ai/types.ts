@@ -10,7 +10,7 @@
 // Core Types
 // ============================================================================
 
-export type AIProviderType = 'openai' | 'anthropic' | 'custom';
+export type AIProviderType = 'mastra' | 'openai' | 'anthropic' | 'custom';
 
 export interface AIMessage {
   role: 'system' | 'user' | 'assistant';
