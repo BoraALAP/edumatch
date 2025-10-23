@@ -28,8 +28,8 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-background text-foreground">
-      <header className="border-b border-border/60 bg-background/70 backdrop-blur">
+    <div className="min-h-screen  text-foreground">
+      <header className="border-b border-border/60 bg-background/70 backdrop-blur z-30 fixed top-0 left-0 right-0">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">EduMatch</h1>
           <div className="flex items-center gap-3">
@@ -46,7 +46,7 @@ export default async function HomePage() {
           </div>
         </div>
       </header>
-      <div className="absolute -top-0  mx-auto  overflow-auto inset-0 z-0 h-[800px] ">
+      <div className="absolute   mx-auto  overflow-auto inset-0 z-0 h-[800px] ">
 
         <Prism
           animationType="rotate"
@@ -63,7 +63,7 @@ export default async function HomePage() {
 
       </div>
 
-      <main className="mx-auto flex max-w-7xl flex-col gap-24 bg-background/40 px-4 pb-24 sm:px-6 lg:px-8 relative">
+      <main className="mx-auto pt-24 flex max-w-7xl flex-col gap-24 bg-background/40 px-4 pb-24 sm:px-6 lg:px-8 relative">
         <section className="   grid items-center gap-16 ">
           <div className="space-y-10 z-20 py-24  text-center ">
             <span className="mx-auto inline-flex items-center justify-center rounded-full bg-primary/15 px-4 py-1 text-sm font-medium text-primary lg:mx-0">
