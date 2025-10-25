@@ -105,14 +105,14 @@ export default function ChatInterface({
         const avatarSrc = aiMessage
           ? '/ai-coach.svg'
           : isCurrentUser
-          ? currentUserProfile?.avatar_url ?? ''
-          : otherUser.avatar_url ?? '';
+            ? currentUserProfile?.avatar_url ?? ''
+            : otherUser.avatar_url ?? '';
 
         const avatarName = aiMessage
           ? 'AI'
           : isCurrentUser
-          ? currentUserProfile?.display_name || currentUserProfile?.full_name || 'You'
-          : otherUser.display_name || otherUser.full_name || 'Partner';
+            ? currentUserProfile?.display_name || currentUserProfile?.full_name || 'You'
+            : otherUser.display_name || otherUser.full_name || 'Partner';
 
         const isCorrection =
           aiMessage &&
@@ -258,7 +258,7 @@ export default function ChatInterface({
                   src={otherUser.avatar_url || undefined}
                   alt={otherUser.display_name || otherUser.full_name || 'Partner'}
                 />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-lg font-bold">
+                <AvatarFallback className="bg-linear-to-br from-primary to-secondary text-primary-foreground text-lg font-bold">
                   {(otherUser.display_name || otherUser.full_name || 'U')[0].toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -320,8 +320,8 @@ export default function ChatInterface({
                       item.isAI && item.isCorrection
                         ? 'group-[.is-assistant]:bg-amber-100 group-[.is-assistant]:text-amber-900 dark:group-[.is-assistant]:bg-amber-200/10 dark:group-[.is-assistant]:text-amber-100'
                         : item.isAI
-                        ? 'group-[.is-assistant]:bg-secondary/80'
-                        : ''
+                          ? 'group-[.is-assistant]:bg-secondary/80'
+                          : ''
                     )}
                   >
                     {item.isAI ? (
@@ -352,8 +352,8 @@ export default function ChatInterface({
                     item.isAI && item.isCorrection
                       ? 'ring-amber-200 dark:ring-amber-300/40'
                       : item.isAI
-                      ? 'ring-primary/40'
-                      : 'ring-border'
+                        ? 'ring-primary/40'
+                        : 'ring-border'
                   )}
                   name={item.isAI ? 'AI' : item.avatarName}
                   src={item.avatarSrc}

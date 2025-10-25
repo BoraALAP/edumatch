@@ -238,19 +238,18 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
 
       {/* Main Card */}
       <Card
-        className={`relative p-6 transition-all duration-300 ${
-          swipeDirection === 'left'
+        className={`relative p-6 transition-all duration-300 ${swipeDirection === 'left'
             ? 'translate-x-[-120%] rotate-[-20deg] opacity-0'
             : swipeDirection === 'right'
-            ? 'translate-x-[120%] rotate-[20deg] opacity-0'
-            : 'translate-x-0 rotate-0 opacity-100'
-        }`}
+              ? 'translate-x-[120%] rotate-[20deg] opacity-0'
+              : 'translate-x-0 rotate-0 opacity-100'
+          }`}
       >
         {/* Profile Content */}
         <div className="space-y-6">
           {/* Avatar and Basic Info */}
           <div className="flex items-start gap-4">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-4xl font-bold">
+            <div className="w-24 h-24 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-4xl font-bold">
               {currentProfile.avatar_url ? (
                 <img
                   src={currentProfile.avatar_url}
@@ -317,7 +316,7 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
               <div className="flex items-center gap-2">
                 <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-primary to-primary/70"
+                    className="h-full bg-linear-to-r from-primary to-primary/70"
                     style={{
                       width: `${Math.min(calculateMatchScore(currentProfile) * 5, 100)}%`,
                     }}

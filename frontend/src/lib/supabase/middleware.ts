@@ -49,6 +49,10 @@ export async function updateSession(request: NextRequest) {
   const claims = data?.claims;
   const user = claims?.sub ? { id: claims.sub } : null;
 
+  // Extract role from JWT custom claims if available (set during auth)
+  // This avoids DB queries on every request
+  const userRole = claims?.user_role as string | undefined;
+
   // Define protected routes
   const protectedRoutes = ['/dashboard', '/chat', '/matches', '/profile'];
   const adminRoutes = ['/admin'];
@@ -75,20 +79,27 @@ export async function updateSession(request: NextRequest) {
 
   // Role-based routing for authenticated users
   if (user && isAuthRoute) {
-    // Get user profile to determine role
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, school_id, onboarding_completed')
-      .eq('id', user.id)
-      .maybeSingle();
-
     const url = request.nextUrl.clone();
 
-    // Redirect based on role
-    if (profile?.role === 'school_admin') {
+    // Use cached role from JWT claims if available, otherwise query DB
+    if (userRole === 'school_admin') {
       url.pathname = '/admin';
-    } else {
+    } else if (userRole) {
+      // Role is cached in JWT, use it
       url.pathname = '/dashboard';
+    } else {
+      // Fallback: Query DB if role not in claims (backward compatibility)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profile?.role === 'school_admin') {
+        url.pathname = '/admin';
+      } else {
+        url.pathname = '/dashboard';
+      }
     }
 
     return NextResponse.redirect(url);
@@ -96,13 +107,21 @@ export async function updateSession(request: NextRequest) {
 
   // Protect admin routes - only school_admin and admin can access
   if (user && isAdminRoute) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle();
+    // Use cached role from JWT claims if available, otherwise query DB
+    let role = userRole;
 
-    if (profile?.role !== 'school_admin' && profile?.role !== 'admin') {
+    if (!role) {
+      // Fallback: Query DB if role not in claims (backward compatibility)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      role = profile?.role;
+    }
+
+    if (role !== 'school_admin' && role !== 'admin') {
       const url = request.nextUrl.clone();
       url.pathname = '/dashboard';
       return NextResponse.redirect(url);

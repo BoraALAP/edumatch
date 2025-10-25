@@ -13,6 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -24,12 +33,24 @@ function LoginForm() {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  // Alert dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState('');
+  const [dialogMessage, setDialogMessage] = useState('');
+
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
   const router = useRouter();
   const supabase = createClient();
   const redirectParam = searchParams.get('redirect_to');
   const redirectTo = redirectParam && redirectParam.startsWith('/') ? redirectParam : '/dashboard';
+
+  const showDialog = (title: string, message: string) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogOpen(true);
+  };
 
   const handleSocialLogin = async (providerName: 'google' | 'github') => {
     setIsLoading(true);
@@ -44,7 +65,7 @@ function LoginForm() {
 
     if (error) {
       console.error('Error logging in:', error);
-      alert(`Failed to log in with ${providerName}`);
+      showDialog('Login Failed', `Failed to log in with ${providerName}. Please try again.`);
       setIsLoading(false);
       setProvider(null);
     }
@@ -286,6 +307,21 @@ function LoginForm() {
           <p>By continuing, you agree to our Terms of Service and Privacy Policy</p>
         </div>
       </Card>
+
+      {/* Alert Dialog */}
+      <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{dialogTitle}</AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line">
+              {dialogMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

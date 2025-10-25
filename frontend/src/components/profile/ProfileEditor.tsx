@@ -238,7 +238,7 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
       <Card className="p-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-3xl font-bold">
+            <div className="w-20 h-20 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-3xl font-bold">
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
@@ -341,11 +341,10 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
                   <button
                     key={level}
                     onClick={() => setProficiencyLevel(level)}
-                    className={`px-4 py-2 border-2 rounded-lg transition-all ${
-                      proficiencyLevel === level
+                    className={`px-4 py-2 border-2 rounded-lg transition-all ${proficiencyLevel === level
                         ? 'border-primary bg-primary/10 text-primary/90'
                         : 'border-border hover:border-border'
-                    }`}
+                      }`}
                   >
                     {level}
                   </button>
@@ -378,15 +377,13 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
                     key={interest}
                     onClick={() => toggleInterest(interest)}
                     disabled={!selectedInterests.includes(interest) && selectedInterests.length >= 5}
-                    className={`p-3 border-2 rounded-lg text-left transition-all ${
-                      selectedInterests.includes(interest)
+                    className={`p-3 border-2 rounded-lg text-left transition-all ${selectedInterests.includes(interest)
                         ? 'border-primary bg-primary/10'
                         : 'border-border hover:border-border'
-                    } ${
-                      !selectedInterests.includes(interest) && selectedInterests.length >= 5
+                      } ${!selectedInterests.includes(interest) && selectedInterests.length >= 5
                         ? 'opacity-50 cursor-not-allowed'
                         : ''
-                    }`}
+                      }`}
                   >
                     <span className="font-medium">{interest}</span>
                   </button>

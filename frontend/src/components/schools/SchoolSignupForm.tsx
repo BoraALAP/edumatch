@@ -58,7 +58,7 @@ export default function SchoolSignupForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/schools/setup`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/schools/setup`,
         },
       });
 
@@ -86,7 +86,7 @@ export default function SchoolSignupForm() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/schools/setup`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/schools/setup`,
           data: {
             is_school_admin: true, // Mark this as school admin signup
           },

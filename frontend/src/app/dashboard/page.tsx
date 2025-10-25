@@ -141,11 +141,11 @@ export default async function DashboardPage() {
         matched_interests: match.matched_interests ?? [],
         partner: partner
           ? {
-              id: partner.id,
-              name: partner.display_name || partner.full_name || 'Practice Partner',
-              avatar_url: partner.avatar_url,
-              proficiency_level: partner.proficiency_level,
-            }
+            id: partner.id,
+            name: partner.display_name || partner.full_name || 'Practice Partner',
+            avatar_url: partner.avatar_url,
+            proficiency_level: partner.proficiency_level,
+          }
           : null,
         unread_count: unreadMap.get(match.id) ?? 0,
         session_type: match.session_type,
@@ -176,7 +176,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background text-foreground">
+    <div className="min-h-screen text-foreground">
       {/* Header */}
       <header className="border-b border-border/60 bg-background/70 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -216,7 +216,7 @@ export default async function DashboardPage() {
             )}
             <div>
               <h2 className="text-2xl font-semibold text-foreground">
-                Welcome back, {user.user_metadata?.full_name || user.email}!
+                Welcome back,  {profile.first_name || user.user_metadata?.full_name || user.email}!
               </h2>
               <p className="text-muted-foreground mt-1">
                 Ready to practice your English conversation skills?
@@ -258,7 +258,7 @@ export default async function DashboardPage() {
           </section>
 
           <aside className="space-y-6">
-            <Card className="border border-white/10 bg-background/60 p-6 backdrop-blur">
+            <Card className="border border-white/10  p-6 backdrop-blur">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Practice Solo</h2>
                 <p className="text-sm text-muted-foreground">
@@ -267,14 +267,12 @@ export default async function DashboardPage() {
               </div>
               <Button
                 asChild
-                variant="secondary"
-                className="border-white/20 bg-white/10 text-white hover:bg-white/20"
               >
                 <Link href="/practice">Start Solo Practice</Link>
               </Button>
             </Card>
 
-            <Card className="border border-primary/40 bg-primary/15 p-6 backdrop-blur">
+            <Card className="border border-white/10  p-6 backdrop-blur">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Need a fresh conversation?</h2>
                 <p className="text-sm text-muted-foreground">
@@ -293,7 +291,7 @@ export default async function DashboardPage() {
                     src={profile.avatar_url || undefined}
                     alt={profile.display_name || profile.full_name || 'Profile'}
                   />
-                  <AvatarFallback className="bg-gradient-to-br from-primary to-secondary text-primary-foreground text-xl font-semibold">
+                  <AvatarFallback className="bg-linear-to-br from-primary to-secondary text-primary-foreground text-xl font-semibold">
                     {(profile.display_name || profile.full_name || user.email || 'U')[0].toUpperCase()}
                   </AvatarFallback>
                 </Avatar>

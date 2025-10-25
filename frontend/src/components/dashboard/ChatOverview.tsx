@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty';
+import { MessageSquare, Archive } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { MatchStatus } from '@/types';
 
@@ -101,7 +103,7 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-border px-6 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Chats</h2>
           <p className="text-sm text-muted-foreground">
@@ -120,9 +122,8 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
               <button
                 key={option.key}
                 type="button"
-                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-                  isSelected ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${isSelected ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
                 onClick={() => setView(option.key)}
               >
                 {option.label}
@@ -133,26 +134,32 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
       </div>
 
       {currentList.length === 0 ? (
-        <div className="px-6 py-10 text-center">
-          <div className="text-4xl mb-3">{view === 'active' ? '💬' : '📁'}</div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            {view === 'active' ? 'No active chats yet' : 'No archived chats yet'}
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            {view === 'active'
-              ? 'Accept a pending request or find a new partner to start chatting.'
-              : 'Archived conversations will appear here after they end.'}
-          </p>
-          {view === 'active' ? (
-            <Button asChild>
-              <Link href="/matches">Find a new partner</Link>
-            </Button>
-          ) : (
-            <Button asChild variant="outline">
-              <Link href="/chat">Go to chats</Link>
-            </Button>
-          )}
-        </div>
+        <Empty className="border-0 px-6 py-10">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              {view === 'active' ? <MessageSquare /> : <Archive />}
+            </EmptyMedia>
+            <EmptyTitle>
+              {view === 'active' ? 'No active chats yet' : 'No archived chats yet'}
+            </EmptyTitle>
+            <EmptyDescription>
+              {view === 'active'
+                ? 'Accept a pending request or find a new partner to start chatting.'
+                : 'Archived conversations will appear here after they end.'}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            {view === 'active' ? (
+              <Button asChild>
+                <Link href="/matches">Find a new partner</Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline">
+                <Link href="/chat">Go to chats</Link>
+              </Button>
+            )}
+          </EmptyContent>
+        </Empty>
       ) : (
         <ul className="divide-y divide-border">
           {currentList.map((match) => {
@@ -162,61 +169,59 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
               <li key={match.id}>
                 <Link
                   href={match.session_type === 'solo' ? `/practice/${match.id}` : `/chat/${match.id}`}
-                  className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted ${
-                    hasUnread ? 'bg-primary/10' : ''
-                  }`}
+                  className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted ${hasUnread ? 'bg-primary/10' : ''
+                    }`}
                 >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold ${
-                  match.session_type === 'solo'
-                    ? 'bg-gradient-to-br from-purple-500 to-pink-500 text-white'
-                    : 'bg-gradient-to-br from-primary to-secondary text-primary-foreground'
-                }`}>
-                  {match.session_type === 'solo' ? (
-                    <span className="text-2xl">🤖</span>
-                  ) : match.partner?.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={match.partner.avatar_url}
-                      alt={match.partner.name}
-                      className="h-full w-full rounded-full object-cover"
-                    />
-                  ) : (
-                    getInitials(match.partner?.name || 'U')
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-foreground truncate">
-                      {match.partner?.name || 'Conversation'}
-                    </p>
-                    {match.session_type === 'solo' && (
-                      <Badge variant="default" className="text-xs bg-purple-500">
-                        Solo Practice
-                      </Badge>
-                    )}
-                    {match.partner?.proficiency_level && (
-                      <Badge variant="secondary" className="text-xs">
-                        {match.partner.proficiency_level}
-                      </Badge>
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold ${match.session_type === 'solo'
+                    ? 'bg-linear-to-br from-purple-500 to-pink-500 text-white'
+                    : 'bg-linear-to-br from-primary to-secondary text-primary-foreground'
+                    }`}>
+                    {match.session_type === 'solo' ? (
+                      <span className="text-2xl">🤖</span>
+                    ) : match.partner?.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={match.partner.avatar_url}
+                        alt={match.partner.name}
+                        className="h-full w-full rounded-full object-cover"
+                      />
+                    ) : (
+                      getInitials(match.partner?.name || 'U')
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                    <span>Updated {formatDate(match.updated_at)}</span>
-                    {match.matched_interests.length > 0 && (
-                      <span>
-                        {match.matched_interests[0]}
-                        {match.matched_interests.length > 1 && ` +${match.matched_interests.length - 1} more`}
-                      </span>
-                    )}
-                  </div>
-                </div>
 
-                <div className="text-sm text-muted-foreground capitalize">
-                  {match.status}
-                </div>
-              </Link>
-            </li>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-foreground truncate">
+                        {match.partner?.name || 'Conversation'}
+                      </p>
+                      {match.session_type === 'solo' && (
+                        <Badge variant="default" className="text-xs bg-purple-500">
+                          Solo Practice
+                        </Badge>
+                      )}
+                      {match.partner?.proficiency_level && (
+                        <Badge variant="secondary" className="text-xs">
+                          {match.partner.proficiency_level}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                      <span>Updated {formatDate(match.updated_at)}</span>
+                      {match.matched_interests.length > 0 && (
+                        <span>
+                          {match.matched_interests[0]}
+                          {match.matched_interests.length > 1 && ` +${match.matched_interests.length - 1} more`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-muted-foreground capitalize">
+                    {match.status}
+                  </div>
+                </Link>
+              </li>
             );
           })}
         </ul>

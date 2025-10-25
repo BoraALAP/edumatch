@@ -44,7 +44,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const hasSchoolContext = Boolean(profile.school_id);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/95 to-background text-foreground">
+    <div className="min-h-screen bg-linear-to-br from-background via-background/95 to-background text-foreground">
       <header className="border-b border-border/60 bg-background/70 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 md:flex-row md:items-center md:justify-between">
           <div>

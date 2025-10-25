@@ -324,3 +324,4 @@ Sensitive data (emails, API keys) never leave MCP boundaries.
 ---
 
 This `AGENT.md` defines the operational behavior, dependencies, and data responsibilities of all AI agents within the EduMatch platform, enabling Codex to orchestrate them efficiently using **OpenAI’s Agent Builder**, **AI SDK**, and **MCP toolchain**.
+- Please don't use alert api of the browser. always use shadcn components as much as you can.

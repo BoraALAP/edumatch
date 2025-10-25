@@ -136,7 +136,7 @@ export default async function ChatListPage() {
                     <Card className="p-4 hover:shadow-lg transition-shadow cursor-pointer">
                       <div className="flex items-center gap-4">
                         {/* Avatar */}
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-2xl font-bold flex-shrink-0">
+                        <div className="w-16 h-16 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-2xl font-bold flex-shrink-0">
                           {otherUser.avatar_url ? (
                             <img
                               src={otherUser.avatar_url}

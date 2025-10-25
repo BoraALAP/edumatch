@@ -122,7 +122,7 @@ export default function MatchRequestsPanel({
                   className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex flex-1 items-start gap-3">
-                    <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-lg font-bold text-primary-foreground sm:flex">
+                    <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary to-secondary text-lg font-bold text-primary-foreground sm:flex">
                       {requester?.avatar_url ? (
                         <img
                           src={requester.avatar_url}
