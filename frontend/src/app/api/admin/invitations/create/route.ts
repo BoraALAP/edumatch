@@ -1,3 +1,17 @@
+/**
+ * Invitation Creation API
+ *
+ * Creates invitations and auth users immediately.
+ * Flow:
+ * 1. Validate admin permissions and school capacity
+ * 2. Create invitation records in database
+ * 3. Create auth users with email confirmation
+ * 4. Send password setup emails (using Supabase magic link)
+ * 5. User clicks email → auto-login → complete profile
+ *
+ * This pattern gives admins control and reduces friction for invitees.
+ */
+
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -12,7 +26,7 @@ import type { InvitationSettings } from '@/types/schools';
 
 const invitationSchema = z.object({
   emails: z.array(z.string().email().transform((email) => email.toLowerCase().trim())).min(1).max(50),
-  role: z.enum(['student', 'teacher']).optional().default('student'),
+  role: z.enum(['student', 'teacher', 'school_admin']).optional().default('student'),
   metadata: z.record(z.any()).optional(),
   schoolId: z.string().uuid().optional(),
 });
@@ -41,12 +55,26 @@ export async function POST(request: Request) {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, role, school_id, full_name')
+    .select('id, role, school_id, full_name, first_name, last_name')
     .eq('id', user.id)
     .maybeSingle();
 
   if (profileError || !profile) {
-    return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    console.error('[invitations] Profile lookup failed:', {
+      userId: user.id,
+      userEmail: user.email,
+      error: profileError,
+      profileExists: !!profile,
+    });
+    return NextResponse.json({
+      error: 'Profile not found',
+      details: 'Your user profile could not be found. Please complete onboarding first.',
+      debug: {
+        userId: user.id,
+        hasError: !!profileError,
+        errorMessage: profileError?.message,
+      }
+    }, { status: 404 });
   }
 
   const allowedRoles = new Set(['school_admin', 'admin']);
@@ -105,7 +133,21 @@ export async function POST(request: Request) {
     .eq('status', 'pending');
 
   if (existingError) {
-    return NextResponse.json({ error: 'Failed to check existing invitations' }, { status: 500 });
+    console.error('[invitations] Failed to check existing invitations:', {
+      error: existingError,
+      userId: user.id,
+      profileRole: profile.role,
+      profileSchoolId: profile.school_id,
+      targetSchoolId,
+    });
+    return NextResponse.json({
+      error: 'Failed to check existing invitations',
+      details: existingError.message,
+      debug: {
+        profileRole: profile.role,
+        hasSchoolId: !!profile.school_id,
+      }
+    }, { status: 500 });
   }
 
   const existingEmailSet = new Set((existingInvites ?? []).map((invite) => invite.email.toLowerCase()));
@@ -120,32 +162,36 @@ export async function POST(request: Request) {
     }, { status: 409 });
   }
 
-  const [{ count: studentCount }, { count: pendingCount }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('school_id', targetSchoolId)
-      .eq('role', 'student'),
-    supabase
-      .from('student_invitations')
-      .select('id', { count: 'exact', head: true })
-      .eq('school_id', targetSchoolId)
-      .eq('status', 'pending'),
-  ]);
+  // Only check capacity for student invitations (not for teachers or school_admins)
+  if (role === 'student') {
+    const [{ count: studentCount }, { count: pendingCount }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('school_id', targetSchoolId)
+        .eq('role', 'student'),
+      supabase
+        .from('student_invitations')
+        .select('id', { count: 'exact', head: true })
+        .eq('school_id', targetSchoolId)
+        .eq('role', 'student')
+        .eq('status', 'pending'),
+    ]);
 
-  const maxStudents = school.max_students ?? Number.POSITIVE_INFINITY;
-  const projectedTotal = (studentCount ?? 0) + (pendingCount ?? 0) + emailsToInvite.length;
+    const maxStudents = school.max_students ?? Number.POSITIVE_INFINITY;
+    const projectedTotal = (studentCount ?? 0) + (pendingCount ?? 0) + emailsToInvite.length;
 
-  if (projectedTotal > maxStudents) {
-    return NextResponse.json({
-      error: 'Inviting these students exceeds the school capacity',
-      capacity: {
-        max: maxStudents,
-        currentStudents: studentCount ?? 0,
-        pendingInvitations: pendingCount ?? 0,
-        requested: emailsToInvite.length,
-      },
-    }, { status: 400 });
+    if (projectedTotal > maxStudents) {
+      return NextResponse.json({
+        error: 'Inviting these students exceeds the school capacity',
+        capacity: {
+          max: maxStudents,
+          currentStudents: studentCount ?? 0,
+          pendingInvitations: pendingCount ?? 0,
+          requested: emailsToInvite.length,
+        },
+      }, { status: 400 });
+    }
   }
 
   const now = new Date();
@@ -161,42 +207,117 @@ export async function POST(request: Request) {
     role,
   }));
 
+  // Step 1: Create invitation records in database
   const { data: insertedInvitations, error: insertError } = await supabase
     .from('student_invitations')
     .insert(invitations)
     .select('*');
 
   if (insertError || !insertedInvitations) {
+    console.error('[invitations] Failed to create invitation records:', insertError);
     return NextResponse.json({ error: 'Failed to create invitations' }, { status: 500 });
   }
 
+  // Step 2: Create auth users immediately (better pattern for schools)
+  // This allows admins to "create" accounts rather than just send invites
+  const serviceClient = createServiceRoleClient();
   const baseUrl = getBaseUrl();
-  const expiresInLabel = '7 days';
-  const sendResults = [] as { email: string; success: boolean; error?: string }[];
+  const sendResults = [] as { email: string; success: boolean; error?: string; userId?: string }[];
 
   for (const invitation of insertedInvitations) {
-    const inviteLink = `${baseUrl}/invite/${invitation.token}`;
-    const emailTemplate = buildInvitationEmail({
-      schoolName: school.name,
-      adminName: profile.full_name ?? school.admin_name ?? null,
-      inviteLink,
-      expiresIn: expiresInLabel,
-    });
+    try {
+      // Create auth user with email confirmation
+      // User will receive Supabase's magic link to set password and login
+      const { data: authUser, error: authError } = await serviceClient.auth.admin.createUser({
+        email: invitation.email,
+        email_confirm: true, // User can login immediately after setting password
+        user_metadata: {
+          // Pre-populate metadata from invitation
+          invited_by: user.id,
+          school_id: targetSchoolId,
+          role: invitation.role,
+          invitation_id: invitation.id,
+          // Include any metadata from invitation (grade, class, etc)
+          ...(invitation.metadata as Record<string, unknown>),
+        },
+      });
 
-    const { success, error } = await sendEmail({
-      to: invitation.email,
-      subject: emailTemplate.subject,
-      html: emailTemplate.html,
-      text: emailTemplate.text,
-    });
+      if (authError || !authUser.user) {
+        console.error('[invitations] Failed to create auth user:', authError);
+        sendResults.push({
+          email: invitation.email,
+          success: false,
+          error: `Failed to create user account: ${authError?.message}`,
+        });
+        continue;
+      }
 
-    sendResults.push({ email: invitation.email, success, error });
+      // Update invitation record with user_id
+      await supabase
+        .from('student_invitations')
+        .update({ user_id: authUser.user.id })
+        .eq('id', invitation.id);
+
+      // Generate password reset link (user will set their password)
+      const { data: resetData, error: resetError } = await serviceClient.auth.admin.generateLink({
+        type: 'magiclink',
+        email: invitation.email,
+        options: {
+          redirectTo: `${baseUrl}/onboarding?invited=true&token=${invitation.token}`,
+        },
+      });
+
+      if (resetError || !resetData.properties) {
+        console.error('[invitations] Failed to generate magic link:', resetError);
+        sendResults.push({
+          email: invitation.email,
+          success: false,
+          userId: authUser.user.id,
+          error: `Account created but failed to send email: ${resetError?.message}`,
+        });
+        continue;
+      }
+
+      // Send email with magic link for password setup
+      // Build admin name from first_name + last_name, or fall back to full_name or school admin_name
+      const adminName = profile.first_name && profile.last_name
+        ? `${profile.first_name} ${profile.last_name}`
+        : profile.full_name ?? school.admin_name ?? null;
+
+      const emailTemplate = buildInvitationEmail({
+        schoolName: school.name,
+        adminName,
+        inviteLink: resetData.properties.action_link, // This is the magic link
+        expiresIn: '7 days',
+      });
+
+      const { success, error: sendError } = await sendEmail({
+        to: invitation.email,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: emailTemplate.text,
+      });
+
+      sendResults.push({
+        email: invitation.email,
+        success,
+        userId: authUser.user.id,
+        error: sendError,
+      });
+
+    } catch (error) {
+      console.error('[invitations] Unexpected error processing invitation:', error);
+      sendResults.push({
+        email: invitation.email,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 
-  // Optionally attach auth metadata when available
+  // Update admin's last invitation timestamp (optional metadata)
   try {
-    const serviceClient = createServiceRoleClient();
-    await serviceClient.auth.admin.updateUserById(profile.id, {
+    await serviceClient.auth.admin.updateUserById(user.id, {
       user_metadata: {
         last_invitation_batch_at: now.toISOString(),
       },

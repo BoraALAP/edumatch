@@ -18,8 +18,12 @@ import { createClient } from '@/lib/supabase/client';
 import { ALL_PRACTICE_TOPICS } from '@/constants/onboarding';
 import { Loader2 } from 'lucide-react';
 
+type SoloPracticeProfile = Profile & {
+  learning_goals?: string[] | null;
+};
+
 interface SoloPracticeInterfaceProps {
-  profile: Profile;
+  profile: SoloPracticeProfile;
 }
 
 export default function SoloPracticeInterface({
@@ -41,7 +45,7 @@ export default function SoloPracticeInterface({
           student_id: profile.id,
           topic,
           proficiency_level: profile.proficiency_level,
-          learning_goals: (profile as any).learning_goals || [],
+          learning_goals: profile.learning_goals ?? [],
           grammar_focus: [], // TODO: Get from curriculum
           status: 'active',
           started_at: new Date().toISOString(),

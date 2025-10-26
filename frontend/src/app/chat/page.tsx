@@ -5,6 +5,7 @@
  * Server component that fetches user matches from Supabase.
  */
 
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { Card } from '@/components/ui/card';
@@ -138,10 +139,13 @@ export default async function ChatListPage() {
                         {/* Avatar */}
                         <div className="w-16 h-16 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-2xl font-bold flex-shrink-0">
                           {otherUser.avatar_url ? (
-                            <img
+                            <Image
                               src={otherUser.avatar_url}
                               alt={otherUser.display_name || 'Profile'}
+                              width={64}
+                              height={64}
                               className="w-full h-full rounded-full object-cover"
+                              unoptimized
                             />
                           ) : (
                             (otherUser.display_name || otherUser.full_name || 'U')[0].toUpperCase()

@@ -1,3 +1,11 @@
+/**
+ * Invite Members Dialog Component
+ *
+ * Dialog for inviting students, teachers, and school admins.
+ * Supports batch email invitations with optional metadata.
+ * Uses field components for consistent form styling.
+ */
+
 'use client';
 
 import { useState, useTransition } from 'react';
@@ -15,18 +23,24 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import {
+  Field,
+  FieldLabel,
+  FieldDescription,
+  FieldGroup,
+} from '@/components/ui/field';
 
 type Props = {
   triggerLabel?: string;
   schoolId?: string;
 };
 
-export function InviteStudentsDialog({ triggerLabel = 'Invite Students', schoolId }: Props) {
+export function InviteStudentsDialog({ triggerLabel = 'Invite Members', schoolId }: Props) {
   const router = useRouter();
 
   const [open, setOpen] = useState(false);
   const [emailsInput, setEmailsInput] = useState('');
-  const [role, setRole] = useState<'student' | 'teacher'>('student');
+  const [role, setRole] = useState<'student' | 'teacher' | 'school_admin'>('student');
   const [grade, setGrade] = useState('');
   const [classroom, setClassroom] = useState('');
   const [customMessage, setCustomMessage] = useState('');
@@ -114,64 +128,109 @@ export function InviteStudentsDialog({ triggerLabel = 'Invite Students', schoolI
     });
   };
 
+  const getRoleDescription = () => {
+    switch (role) {
+      case 'school_admin':
+        return 'School admins can manage all school settings, invite members, and view reports.';
+      case 'teacher':
+        return 'Teachers can view their students and monitor practice sessions.';
+      case 'student':
+        return 'Students can practice conversations and match with peers.';
+      default:
+        return '';
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button disabled={isPending}>{triggerLabel}</Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Invite students</DialogTitle>
+          <DialogTitle>Invite Members</DialogTitle>
           <DialogDescription>
-            Enter one or more email addresses. We&apos;ll send each recipient a unique invitation link that expires in 7 days.
+            Invite students, teachers, or school admins. Each person will receive a unique invitation link that expires in 7 days.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Email addresses
-              <span className="ml-1 text-xs font-normal text-muted-foreground">(comma, space, or newline separated)</span>
-            </label>
-            <Textarea
-              value={emailsInput}
-              onChange={(event) => setEmailsInput(event.target.value)}
-              placeholder="student1@example.com&#10;student2@example.com"
-              rows={5}
-              required
-            />
-          </div>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="emails">
+                Email addresses
+              </FieldLabel>
+              <FieldDescription>
+                Enter one or more email addresses (comma, space, or newline separated)
+              </FieldDescription>
+              <Textarea
+                id="emails"
+                value={emailsInput}
+                onChange={(event) => setEmailsInput(event.target.value)}
+                placeholder="person1@example.com&#10;person2@example.com"
+                rows={5}
+                required
+              />
+            </Field>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Role</label>
+            <Field>
+              <FieldLabel htmlFor="role">Role</FieldLabel>
+              <FieldDescription>{getRoleDescription()}</FieldDescription>
               <select
+                id="role"
                 value={role}
-                onChange={(event) => setRole(event.target.value as 'student' | 'teacher')}
+                onChange={(event) => setRole(event.target.value as 'student' | 'teacher' | 'school_admin')}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <option value="student">Student</option>
                 <option value="teacher">Teacher</option>
+                <option value="school_admin">School Admin</option>
               </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Grade (optional)</label>
-              <Input value={grade} onChange={(event) => setGrade(event.target.value)} placeholder="e.g. 9th" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Class / Section (optional)</label>
-              <Input value={classroom} onChange={(event) => setClassroom(event.target.value)} placeholder="e.g. ESL-1" />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-foreground">Custom message (optional)</label>
-              <Textarea
-                value={customMessage}
-                onChange={(event) => setCustomMessage(event.target.value)}
-                placeholder="Add context for the invite email"
-                rows={3}
-              />
-            </div>
-          </div>
+            </Field>
+          </FieldGroup>
+
+          {/* Optional metadata - only show for students and teachers */}
+          {role !== 'school_admin' && (
+            <FieldGroup>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="grade">Grade (optional)</FieldLabel>
+                  <FieldDescription>e.g., 9th, 10th, 11th</FieldDescription>
+                  <Input
+                    id="grade"
+                    value={grade}
+                    onChange={(event) => setGrade(event.target.value)}
+                    placeholder="e.g. 9th"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="classroom">Class / Section (optional)</FieldLabel>
+                  <FieldDescription>e.g., ESL-1, Room 203</FieldDescription>
+                  <Input
+                    id="classroom"
+                    value={classroom}
+                    onChange={(event) => setClassroom(event.target.value)}
+                    placeholder="e.g. ESL-1"
+                  />
+                </Field>
+              </div>
+            </FieldGroup>
+          )}
+
+          <Field>
+            <FieldLabel htmlFor="message">Custom message (optional)</FieldLabel>
+            <FieldDescription>
+              Add a personal note that will be included in the invitation email
+            </FieldDescription>
+            <Textarea
+              id="message"
+              value={customMessage}
+              onChange={(event) => setCustomMessage(event.target.value)}
+              placeholder="Welcome to our school! We're excited to have you join EduMatch..."
+              rows={3}
+            />
+          </Field>
 
           {error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -180,14 +239,14 @@ export function InviteStudentsDialog({ triggerLabel = 'Invite Students', schoolI
           )}
 
           {feedback && (
-            <div className="space-y-2 rounded-md border border-green-500/40 bg-green-500/10 p-3 text-sm text-green-900">
-              <p>
-                Sent {feedback.created} invitation{feedback.created === 1 ? '' : 's'} successfully.
+            <div className="space-y-2 rounded-md border border-green-500/40 bg-green-500/10 p-3 text-sm text-green-900 dark:text-green-100">
+              <p className="font-medium">
+                ✓ Sent {feedback.created} invitation{feedback.created === 1 ? '' : 's'} successfully.
               </p>
               {feedback.duplicates.length > 0 && (
                 <p>
                   Skipped existing pending invites for:{' '}
-                  <span className="font-medium text-foreground">{feedback.duplicates.join(', ')}</span>
+                  <span className="font-medium">{feedback.duplicates.join(', ')}</span>
                 </p>
               )}
             </div>

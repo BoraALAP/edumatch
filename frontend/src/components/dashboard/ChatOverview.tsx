@@ -10,6 +10,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyCont
 import { MessageSquare, Archive } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { MatchStatus } from '@/types';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type PartnerSummary = {
   id: string;
@@ -136,39 +137,60 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
         {chatList.map((match) => {
           const unreadCount = unreadCounts.get(match.id) || 0;
           const hasUnread = unreadCount > 0;
-          return (
-            <li key={match.id}>
+        return (
+          <li key={match.id}>
+            {(() => {
+              const isSoloSession = match.session_type === 'solo';
+              const isVoicePractice = isSoloSession && match.partner?.id === 'ai-coach-voice';
+              const isTextPractice = isSoloSession && match.partner?.id === 'ai-coach-text';
+              const destination = isSoloSession
+                ? isVoicePractice
+                  ? `/voice-practice/${match.id}`
+                  : `/practice/${match.id}`
+                : `/chat/${match.id}`;
+              const topicTitle = match.matched_interests[0] || match.partner?.name || 'Conversation';
+              const soloBadgeLabel = isVoicePractice
+                ? 'Voice Practice'
+                : isTextPractice
+                  ? 'Text Practice'
+                  : 'Solo Practice';
+              return (
               <Link
-                href={match.session_type === 'solo' ? `/practice/${match.id}` : `/chat/${match.id}`}
+                href={destination}
                 className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted ${hasUnread ? 'bg-primary/10' : ''
                   }`}
               >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold ${match.session_type === 'solo'
-                  ? 'bg-linear-to-br from-purple-500 to-pink-500 text-white'
-                  : 'bg-linear-to-br from-primary to-secondary text-primary-foreground'
-                  }`}>
-                  {match.session_type === 'solo' ? (
-                    <span className="text-2xl">🤖</span>
+                <Avatar className="size-12">
+                  {isSoloSession ? (
+                    <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
+                      🤖
+                    </AvatarFallback>
                   ) : match.partner?.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={match.partner.avatar_url}
-                      alt={match.partner.name}
-                      className="h-full w-full rounded-full object-cover"
-                    />
+                    <>
+                      <AvatarImage
+                        src={match.partner.avatar_url}
+                        alt={match.partner.name ?? 'Practice Partner'}
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="text-lg font-semibold">
+                        {getInitials(match.partner?.name || 'U')}
+                      </AvatarFallback>
+                    </>
                   ) : (
-                    getInitials(match.partner?.name || 'U')
+                    <AvatarFallback className="text-lg font-semibold">
+                      {getInitials(match.partner?.name || 'U')}
+                    </AvatarFallback>
                   )}
-                </div>
+                </Avatar>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-foreground truncate">
-                      {match.partner?.name || 'Conversation'}
+                      {topicTitle}
                     </p>
-                    {match.session_type === 'solo' && (
-                      <Badge variant="default" className="text-xs bg-purple-500">
-                        Solo Practice
+                    {isSoloSession && (
+                      <Badge variant="default" className="text-xs">
+                        {soloBadgeLabel}
                       </Badge>
                     )}
                     {match.partner?.proficiency_level && (
@@ -178,11 +200,13 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    {!isSoloSession && match.partner?.name && (
+                      <span className="truncate">{match.partner.name}</span>
+                    )}
                     <span>Updated {formatDate(match.updated_at)}</span>
-                    {match.matched_interests.length > 0 && (
+                    {match.matched_interests.length > 1 && (
                       <span>
-                        {match.matched_interests[0]}
-                        {match.matched_interests.length > 1 && ` +${match.matched_interests.length - 1} more`}
+                        +{match.matched_interests.length - 1} more topics
                       </span>
                     )}
                   </div>
@@ -192,9 +216,11 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
                   {match.status}
                 </div>
               </Link>
-            </li>
-          );
-        })}
+              );
+            })()}
+          </li>
+        );
+      })}
       </ul>
     );
   };

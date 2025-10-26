@@ -28,11 +28,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sparkles, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
-import {
-  AnalyticsService,
-  type AnalyticsIssue,
-  type AnalysisType,
-} from '@/lib/analytics/analytics-service';
+import { AnalyticsService } from '@/lib/analytics/analytics-service';
+import type { AnalyticsIssue, AnalysisType } from '@/lib/analytics/types';
 import type {
   ConversationAnalytics,
   IssueSeverity,
@@ -172,6 +169,7 @@ export default function SessionSummaryModal({
   studentId,
   topic,
   proficiencyLevel,
+  sessionType = 'voice_practice',
   isOpen,
   onClose,
 }: SessionSummaryModalProps) {
@@ -329,7 +327,7 @@ export default function SessionSummaryModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, sessionId, studentId]);
+  }, [isOpen, sessionId, studentId, sessionType]);
 
   const hasAnalytics = useMemo(() => {
     if (!summary) return false;

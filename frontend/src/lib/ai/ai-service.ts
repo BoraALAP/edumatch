@@ -15,7 +15,6 @@
 import type {
   AIProvider,
   AIProviderType,
-  AIProviderConfig,
   ConversationContext,
   ConversationFeedback,
   GrammarCorrectionResult,

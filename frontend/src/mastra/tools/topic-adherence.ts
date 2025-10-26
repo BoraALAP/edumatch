@@ -29,15 +29,16 @@ export const topicAdherenceTool = {
     conversationHistory?: string[];
   }) => {
     try {
-      const result = await aiService.checkTopicAdherence(message, topic);
+      const result = await aiService.checkTopicAdherence(message, topic, conversationHistory);
+      const reasoning = result.reasoning ?? 'Stay focused on the assigned topic.';
 
       return {
         isOnTopic: result.score >= 60,
         score: result.score,
-        reasoning: result.reasoning,
+        reasoning,
         shouldRedirect: result.score < 50,
         redirectionSuggestion: result.score < 50
-          ? `Let's bring the conversation back to ${topic}. ${result.reasoning}`
+          ? `Let's bring the conversation back to ${topic}. ${reasoning}`
           : null,
       };
     } catch (error) {

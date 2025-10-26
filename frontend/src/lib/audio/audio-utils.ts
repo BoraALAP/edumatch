@@ -13,7 +13,7 @@
  * Convert PCM16 audio data to Base64 string
  * Used for sending audio to OpenAI Realtime API
  */
-export function pcm16ToBase64(pcm16: ArrayBuffer): string {
+export function pcm16ToBase64(pcm16: ArrayBufferLike): string {
   const uint8Array = new Uint8Array(pcm16);
   let binary = '';
 
@@ -230,11 +230,16 @@ function writeString(view: DataView, offset: number, string: string): void {
  * Check if browser supports audio capture
  */
 export function isAudioCaptureSupported(): boolean {
-  return !!(
-    navigator.mediaDevices &&
-    navigator.mediaDevices.getUserMedia &&
-    typeof AudioContext !== 'undefined'
-  );
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+
+  const mediaDevices = navigator.mediaDevices;
+  const audioContextCtor =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+  return Boolean(mediaDevices && typeof mediaDevices.getUserMedia === 'function' && audioContextCtor);
 }
 
 /**

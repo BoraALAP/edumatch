@@ -1,15 +1,22 @@
 /**
  * Onboarding Form Component
  *
- * Multi-step form for individual user onboarding.
+ * Multi-step form for user onboarding.
+ * Handles both:
+ * 1. Individual signup: Sets role to 'individual'
+ * 2. School invitation: Uses role from invitation, auto-accepts invitation after completion
+ *
  * Steps: 1) Language Level, 2) Interests, 3) Learning Goals, 4) Personal Info
- * Automatically sets user role to 'individual' upon completion.
- * Uses Stepper component for step management and Supabase client for updates.
+ *
+ * For invited users:
+ * - invitationToken is passed from URL params
+ * - After profile save, automatically accepts invitation
+ * - Role and school_id come from invitation metadata
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,7 +25,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Upload, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Stepper, { Step } from '@/components//StepperCard';
-import { Button } from '@/components/ui/button';
 import { SelectionButton } from '@/components/ui/selection-button';
 import {
   LANGUAGE_LEVELS,
@@ -28,10 +34,12 @@ import {
 
 interface OnboardingFormProps {
   userId: string;
+  invitationToken?: string; // If present, user was invited by school admin
 }
 
-export default function OnboardingForm({ userId }: OnboardingFormProps) {
+export default function OnboardingForm({ userId, invitationToken }: OnboardingFormProps) {
   const supabase = createClient();
+  const isInvited = !!invitationToken;
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,7 +117,7 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
   };
 
   // Validation for current step
-  const isStepValid = () => {
+  const isStepValid = useCallback(() => {
     switch (currentStep) {
       case 1:
         return proficiencyLevel !== '';
@@ -129,7 +137,16 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
       default:
         return true;
     }
-  };
+  }, [
+    currentStep,
+    proficiencyLevel,
+    selectedInterests,
+    learningGoals,
+    firstName,
+    lastName,
+    bio,
+    age,
+  ]);
 
   // Show validation errors when step is invalid and user is trying to proceed
   useEffect(() => {
@@ -166,7 +183,7 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
     } else {
       setErrors({});
     }
-  }, [currentStep, proficiencyLevel, selectedInterests, learningGoals, firstName, lastName, bio, age]);
+  }, [currentStep, proficiencyLevel, isStepValid, selectedInterests, learningGoals, firstName, lastName, bio, age]);
 
   const handleFinalSubmit = async () => {
     setIsLoading(true);
@@ -200,24 +217,47 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
         avatarUrl = data.publicUrl;
       }
 
-      // Use upsert to insert or update the profile
+      // Build profile data
+      // For invited users, role comes from invitation acceptance API
+      // For individual signups, set role to 'individual'
+      const profileData: {
+        id: string;
+        first_name: string;
+        last_name: string;
+        proficiency_level: string;
+        interests: string[];
+        learning_goals: string[];
+        bio: string;
+        age: number;
+        avatar_url: string | null;
+        role?: 'individual';
+        onboarding_completed: boolean;
+        updated_at: string;
+      } = {
+        id: userId,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        proficiency_level: proficiencyLevel,
+        interests: selectedInterests,
+        learning_goals: learningGoals,
+        bio: bio.trim(),
+        age: parseInt(age),
+        avatar_url: avatarUrl,
+        onboarding_completed: true,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Only set role for non-invited users
+      // Invited users get their role from invitation acceptance
+      if (!isInvited) {
+        profileData.role = 'individual';
+      }
+
+      // Save profile to database
       toast.loading('Saving your profile...');
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          id: userId,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          proficiency_level: proficiencyLevel,
-          interests: selectedInterests,
-          learning_goals: learningGoals,
-          bio: bio.trim(),
-          age: parseInt(age),
-          avatar_url: avatarUrl,
-          role: 'individual', // Set role as individual for self-signup
-          onboarding_completed: true,
-          updated_at: new Date().toISOString(),
-        }, {
+        .upsert(profileData, {
           onConflict: 'id'
         });
 
@@ -231,9 +271,47 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
 
       toast.success('Profile saved successfully!');
 
-      // Force a redirect with window.location to bypass cache
-      setTimeout(() => {
-        window.location.href = '/dashboard';
+      // If user was invited, accept the invitation
+      if (isInvited && invitationToken) {
+        toast.loading('Accepting invitation...');
+
+        const acceptResponse = await fetch(`/api/invite/${invitationToken}/accept`, {
+          method: 'POST',
+        });
+
+        toast.dismiss();
+
+        if (!acceptResponse.ok) {
+          console.error('Failed to accept invitation:', acceptResponse.status);
+          toast.error('Profile saved but failed to accept invitation. Please contact your school admin.');
+          // Still redirect to dashboard even if invitation acceptance fails
+        } else {
+          toast.success('Invitation accepted!');
+        }
+      }
+
+      // Redirect to appropriate dashboard
+      // For invited users, we need to check their role after invitation acceptance
+      setTimeout(async () => {
+        if (isInvited) {
+          // Fetch updated profile to get role
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .maybeSingle();
+
+          if (profile?.role === 'school_admin') {
+            window.location.href = '/admin';
+          } else if (profile?.role === 'teacher') {
+            window.location.href = '/dashboard'; // Teachers use same dashboard for now
+          } else {
+            window.location.href = '/dashboard';
+          }
+        } else {
+          // Individual users always go to dashboard
+          window.location.href = '/dashboard';
+        }
       }, 500);
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -242,16 +320,8 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className=" flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-4xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome to EduMatch!</h1>
-          <p className="text-muted-foreground">
-            Let&apos;s set up your profile to find the perfect practice partners
-          </p>
-        </div>
-
         {/* Stepper */}
         <Stepper
           initialStep={1}

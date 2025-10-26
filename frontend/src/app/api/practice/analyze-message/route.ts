@@ -82,8 +82,7 @@ export async function POST(request: NextRequest) {
     // Generate a friendly correction message
     const correctionMessage = await generateCorrectionMessage(
       message,
-      significantIssues,
-      studentLevel
+      significantIssues
     );
 
     // Store the correction in the database
@@ -214,8 +213,7 @@ function getOverallSeverity(issues: Array<{ severity: string }>): 'minor' | 'mod
  */
 async function generateCorrectionMessage(
   originalMessage: string,
-  issues: Array<{ original: string; correction?: string; corrected?: string; explanation?: string; severity: string }>,
-  studentLevel: string
+  issues: Array<{ original: string; correction?: string; corrected?: string; explanation?: string; severity: string }>
 ): Promise<string> {
   // For now, create a template-based message
   // In the future, this could use AI to generate more natural corrections

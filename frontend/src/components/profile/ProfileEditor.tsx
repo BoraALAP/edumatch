@@ -14,6 +14,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -228,10 +229,13 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-3xl font-bold">
               {profile.avatar_url ? (
-                <img
+                <Image
                   src={profile.avatar_url}
                   alt={profile.display_name || 'Profile'}
+                  width={80}
+                  height={80}
                   className="w-full h-full rounded-full object-cover"
+                  unoptimized
                 />
               ) : (
                 (profile.display_name || profile.full_name || 'U')[0].toUpperCase()

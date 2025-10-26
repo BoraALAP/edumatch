@@ -75,6 +75,29 @@ type PracticeMessage = UIMessage & {
   correctionSeverity?: 'minor' | 'moderate' | 'major';
 };
 
+type TextPart = { type: 'text'; text: string };
+
+type TextPracticeMessageRow = {
+  id: string;
+  role: PracticeMessage['role'];
+  content: string;
+  created_at: string | null;
+  message_type: PracticeMessage['messageType'] | null;
+  grammar_issues: GrammarIssue[] | null;
+  correction_severity: PracticeMessage['correctionSeverity'] | null;
+};
+
+const isTextPart = (part: unknown): part is TextPart => {
+  return (
+    typeof part === 'object' &&
+    part !== null &&
+    'type' in part &&
+    (part as { type?: unknown }).type === 'text' &&
+    'text' in part &&
+    typeof (part as { text?: unknown }).text === 'string'
+  );
+};
+
 const extractMessageText = (message?: PracticeMessage): string => {
   if (!message) {
     return '';
@@ -82,10 +105,7 @@ const extractMessageText = (message?: PracticeMessage): string => {
 
   if (Array.isArray(message.parts)) {
     return message.parts
-      .filter(
-        (part): part is { type: 'text'; text: string } =>
-          !!part && part.type === 'text' && typeof part.text === 'string'
-      )
+      .filter(isTextPart)
       .map((part) => part.text)
       .join('');
   }
@@ -98,10 +118,8 @@ const extractMessageText = (message?: PracticeMessage): string => {
 
   if (Array.isArray(content)) {
     return content
-      .filter((part) =>
-        part && typeof part === 'object' && (part as any).type === 'text'
-      )
-      .map((part: any) => part.text as string)
+      .filter(isTextPart)
+      .map((part) => part.text)
       .join('');
   }
 
@@ -149,7 +167,7 @@ export default function SoloPracticeChatInterface({
     async function loadMessages() {
       try {
         console.log('[DEBUG] Loading messages for session:', sessionId);
-        const { data, error} = await supabase
+        const { data, error } = await supabase
           .from('text_practice_messages')
           .select('*')
           .eq('session_id', sessionId)
@@ -164,7 +182,7 @@ export default function SoloPracticeChatInterface({
 
         if (data && data.length > 0) {
           // Convert DB messages to AI SDK UI message format with correction metadata
-          const msgs = data.map((msg: any) => ({
+          const msgs = data.map((msg) => ({
             id: msg.id,
             role: msg.role,
             parts: [
@@ -254,7 +272,8 @@ function ChatInterface({
           filter: `session_id=eq.${sessionId}`,
         },
         (payload) => {
-          const newMsg = payload.new as any;
+          const newMsg = payload.new;
+          if (!newMsg) return;
 
           console.log('[DEBUG] Real-time message received:', newMsg.role, newMsg.message_type);
 

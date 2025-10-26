@@ -5,7 +5,7 @@
  * This bypasses RLS by using the service role or by working with the constraints.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const MATCH_ID = '00000000-0000-0000-0000-000000000100';
 const TOPIC_ID = '00000000-0000-0000-0000-000000000010';

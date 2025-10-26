@@ -23,6 +23,9 @@ import {
   checkGrammar,
   checkTopicAdherence,
 } from '@/mastra/agents/conversation-agent';
+import type {
+  GrammarCorrectionResult as MastraGrammarCorrectionResult,
+} from '@/mastra/agents/conversation-agent';
 import { generateSessionSummary } from '@/mastra/agents/feedback-agent';
 
 export class MastraProvider implements AIProvider {
@@ -42,7 +45,23 @@ export class MastraProvider implements AIProvider {
   // ============================================================================
 
   async checkGrammar(text: string, level?: string): Promise<GrammarCorrectionResult> {
-    return checkGrammar(text, level);
+    const result: MastraGrammarCorrectionResult = await checkGrammar(text, level);
+
+    const issues = (result.issues ?? []).map((issue) => ({
+      type: issue.type ?? 'grammar',
+      original: issue.original,
+      suggestion: issue.suggestion ?? issue.correction ?? issue.original,
+      correction: issue.correction,
+      explanation: issue.explanation,
+      severity: issue.severity ?? 'minor',
+      position: issue.position,
+    }));
+
+    return {
+      hasIssues: (result.hasIssues ?? issues.length > 0) && issues.length > 0,
+      issues,
+      overallFeedback: result.overallFeedback,
+    };
   }
 
   // ============================================================================
@@ -74,11 +93,14 @@ export class MastraProvider implements AIProvider {
   // ============================================================================
 
   async transcribeAudio(audio: Blob): Promise<TranscriptionResult> {
+    void audio;
     // TODO: Implement using Mastra voice capabilities
     throw new Error('Voice transcription not yet implemented for Mastra provider');
   }
 
   async generateSpeech(text: string, options?: VoiceGenerationOptions): Promise<Blob> {
+    void text;
+    void options;
     // TODO: Implement using Mastra voice capabilities
     throw new Error('Text-to-speech not yet implemented for Mastra provider');
   }
@@ -88,6 +110,7 @@ export class MastraProvider implements AIProvider {
   // ============================================================================
 
   streamResponse(prompt: string): ReadableStream<string> {
+    void prompt;
     // TODO: Implement streaming with Mastra
     throw new Error('Streaming not yet implemented for Mastra provider');
   }

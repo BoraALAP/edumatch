@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -137,10 +137,43 @@ export default function ChatInterface({
   const visibleMessageCount = conversationItems.length;
   const messageLabel = visibleMessageCount === 1 ? 'message' : 'messages';
 
+  const markMessagesAsRead = useCallback(async () => {
+    try {
+      await supabase.rpc('mark_messages_as_read', {
+        p_match_id: matchId,
+        p_user_id: currentUserId,
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  }, [supabase, matchId, currentUserId]);
+
+  const fetchMessages = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('match_id', matchId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      if (data) {
+        setMessages(data);
+        // Mark messages as read
+        await markMessagesAsRead();
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase, matchId, markMessagesAsRead]);
+
   // Fetch initial messages
   useEffect(() => {
-    fetchMessages();
-  }, [matchId]);
+    void fetchMessages();
+  }, [fetchMessages]);
 
   // Subscribe to real-time updates
   useEffect(() => {
@@ -167,41 +200,7 @@ export default function ChatInterface({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [matchId]);
-
-  const fetchMessages = async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('match_id', matchId)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      if (data) {
-        setMessages(data);
-        // Mark messages as read
-        await markMessagesAsRead();
-      }
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const markMessagesAsRead = async () => {
-    try {
-      // Use RPC function to mark all unread messages as read
-      await supabase.rpc('mark_messages_as_read', {
-        p_match_id: matchId,
-        p_user_id: currentUserId,
-      });
-    } catch (error) {
-      console.error('Error marking messages as read:', error);
-    }
-  };
+  }, [supabase, matchId, currentUserId, markMessagesAsRead]);
 
   const handlePromptSubmit = async ({ text }: PromptInputMessage) => {
     const trimmedMessage = text?.trim();

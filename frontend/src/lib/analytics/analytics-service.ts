@@ -12,34 +12,12 @@
 
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-export type SessionType = 'text_practice' | 'voice_practice' | 'peer_chat';
-export type MessageMode = 'text' | 'voice';
-export type AnalysisType =
-  | 'grammar'
-  | 'pronunciation'
-  | 'accent'
-  | 'fluency'
-  | 'vocabulary'
-  | 'topic_adherence'
-  | 'spelling'
-  | 'punctuation';
-
-export interface AnalyticsIssue {
-  type: string;
-  severity: 'minor' | 'moderate' | 'major';
-  original: string;
-  suggestion: string;
-  explanation?: string;
-  position?: {
-    start: number;
-    end: number;
-  };
-  phonetic?: {
-    expected: string;
-    actual: string;
-  };
-}
+import type {
+  AnalysisType,
+  AnalyticsIssue,
+  MessageMode,
+  SessionType,
+} from './types';
 
 export interface ConversationAnalyticsInput {
   sessionId: string;

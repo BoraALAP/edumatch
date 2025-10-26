@@ -24,6 +24,7 @@ export interface SoloTextContext {
 export interface SoloTextResponse {
   message: string;
   includesCorrection: boolean;
+  correction?: string;
 }
 
 /**
@@ -45,7 +46,7 @@ function getComplexityGuidelines(level: string): string {
 /**
  * Build the instruction prompt for the text agent
  */
-function buildInstructions(context: SoloTextContext): string {
+export function buildSoloTextInstructions(context: SoloTextContext): string {
   const {
     topic,
     studentLevel,
@@ -120,7 +121,7 @@ export async function runSoloTextAgent(
   context: SoloTextContext,
   studentMessage: string
 ): Promise<SoloTextResponse> {
-  const instructions = buildInstructions(context);
+  const instructions = buildSoloTextInstructions(context);
 
   const response = await soloTextAgent.generate([
     { role: 'system', content: instructions },
@@ -132,6 +133,7 @@ export async function runSoloTextAgent(
   return {
     message,
     includesCorrection: false,
+    correction: undefined,
   };
 }
 

@@ -6,15 +6,27 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { schoolName, adminName, adminEmail, maxStudents } = body;
+    const {
+      schoolName,
+      adminEmail,
+      maxStudents,
+      // Personal info
+      firstName,
+      lastName,
+      age,
+      bio,
+      proficiencyLevel,
+      interests,
+      avatarUrl
+    } = body;
 
     // Validate input
-    if (!schoolName || !adminName || !adminEmail || !maxStudents) {
+    if (!schoolName || !adminEmail || !maxStudents || !firstName || !lastName) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -31,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
-    // Get authenticated user
+    // Get authenticated user and session
     const {
       data: { user },
       error: userError,
@@ -48,6 +60,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify session exists (important for RLS)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      console.error('Session error:', sessionError);
+      console.log('User exists but no session - this will cause RLS to fail');
+      return NextResponse.json(
+        {
+          error: 'Session expired. Please log in again.',
+          details: 'No active session found'
+        },
+        { status: 401 }
+      );
+    }
+
     // Check if user already has a profile
     const { data: existingProfile } = await supabase
       .from('profiles')
@@ -55,20 +81,30 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (existingProfile) {
+    // If profile already has a school, they've already completed registration
+    if (existingProfile?.school_id) {
       return NextResponse.json(
-        { error: 'Account already has a profile. Please contact support.' },
+        { error: 'School already registered for this account.' },
         { status: 400 }
       );
     }
 
-    // Create school record
-    const { data: school, error: schoolError } = await supabase
+    // Create school record using admin client to bypass RLS
+    // This is secure because:
+    // 1. We've verified the user is authenticated above
+    // 2. We've verified they have a valid session
+    // 3. This is an administrative operation
+    // 4. The user becomes the school admin immediately via profiles table
+    // 5. All subsequent operations use regular RLS policies
+    const adminClient = createAdminClient();
+    const fullName = `${firstName} ${lastName}`;
+
+    const { data: school, error: schoolError } = await adminClient
       .from('schools')
       .insert({
         name: schoolName,
         admin_email: adminEmail,
-        admin_name: adminName,
+        admin_name: fullName,
         max_students: seats,
         is_active: true,
         allow_global_matching: false,
@@ -89,27 +125,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create school admin profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: user.id,
-        role: 'school_admin',
-        display_name: adminName.split(' ')[0], // First name
-        full_name: adminName,
-        school_id: school.id,
-        onboarding_completed: true,
-        proficiency_level: 'C1', // Default for admin
-        interests: ['Education', 'Teaching'],
-        learning_goals: ['Manage school', 'Support students'],
-        allow_global_matching: false,
-      });
+    // Update or create school admin profile
+    const profileData = {
+      role: 'school_admin',
+      first_name: firstName,
+      last_name: lastName,
+      display_name: firstName,
+      full_name: fullName,
+      school_id: school.id,
+      onboarding_completed: true,
+      proficiency_level: proficiencyLevel || 'C1',
+      age: age || null,
+      bio: bio || null,
+      avatar_url: avatarUrl || null,
+      interests: interests && interests.length > 0 ? interests : ['Education', 'Teaching'],
+      learning_goals: ['Manage school', 'Support students'],
+      allow_global_matching: false,
+    };
+
+    const { error: profileError } = existingProfile
+      ? await supabase
+          .from('profiles')
+          .update(profileData)
+          .eq('id', user.id)
+      : await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            ...profileData,
+          });
 
     if (profileError) {
       console.error('Error creating admin profile:', profileError);
 
-      // Try to clean up the school record
-      await supabase.from('schools').delete().eq('id', school.id);
+      // Try to clean up the school record using admin client
+      await adminClient.from('schools').delete().eq('id', school.id);
 
       return NextResponse.json(
         { error: 'Failed to create admin profile', details: profileError.message },

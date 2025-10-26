@@ -28,7 +28,7 @@ export default function AuthCodeErrorPage() {
               Authentication Failed
             </h1>
             <p className="text-muted-foreground">
-              We couldn't verify your email confirmation link. This might happen if:
+              We couldn&apos;t verify your email confirmation link. This might happen if:
             </p>
           </div>
 

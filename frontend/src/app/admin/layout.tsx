@@ -6,8 +6,7 @@ import { AdminNavLink } from './nav-link';
 
 const navigation = [
   { href: '/admin', label: 'Overview' },
-  { href: '/admin/students', label: 'Students' },
-  { href: '/admin/invitations', label: 'Invitations' },
+  { href: '/admin/directory', label: 'Directory' },
   { href: '/admin/settings', label: 'Settings' },
   { href: '/admin/reports', label: 'Reports' },
 ];

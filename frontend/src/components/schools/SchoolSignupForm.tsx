@@ -11,10 +11,9 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import {
   AlertDialog,
@@ -25,6 +24,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from '@/components/ui/input-otp';
+import { ArrowLeft } from 'lucide-react';
+import { Card } from '../ui/card';
 
 export default function SchoolSignupForm() {
   const router = useRouter();
@@ -32,7 +40,7 @@ export default function SchoolSignupForm() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState<'auth' | 'school-info'>('auth');
-  const [authMethod, setAuthMethod] = useState<'email' | 'social'>('social');
+  const [provider, setProvider] = useState<string | null>(null);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,8 +48,13 @@ export default function SchoolSignupForm() {
   const [dialogMessage, setDialogMessage] = useState('');
 
   // Form state
+  const [otpSent, setOtpSent] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [schoolName, setSchoolName] = useState('');
   const [adminName, setAdminName] = useState('');
   const [maxStudents, setMaxStudents] = useState('50');
@@ -52,72 +65,129 @@ export default function SchoolSignupForm() {
     setDialogOpen(true);
   };
 
-  const handleSocialAuth = async (provider: 'google' | 'github') => {
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        setEmail(user.email ?? '');
+        setStep('school-info');
+      }
+    };
+
+    void checkSession();
+  }, [supabase]);
+
+  const handleSocialAuth = async (providerName: 'google' | 'github') => {
     setIsLoading(true);
+    setProvider(providerName);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: providerName,
         options: {
           redirectTo: `${window.location.origin}/auth/callback?next=/schools/setup`,
-        },
-      });
-
-      if (error) {
-        showDialog('Authentication Error', error.message);
-      }
-    } catch (error) {
-      console.error('Social auth error:', error);
-      showDialog('Authentication Failed', 'Failed to authenticate. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleEmailSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      showDialog('Missing Information', 'Please enter email and password');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/schools/setup`,
-          data: {
-            is_school_admin: true, // Mark this as school admin signup
+          queryParams: {
+            prompt: 'select_account',
+            access_type: 'offline',
           },
         },
       });
 
       if (error) {
-        showDialog('Signup Error', error.message);
+        showDialog('Authentication Error', error.message);
         setIsLoading(false);
+        setProvider(null);
+      }
+    } catch (error) {
+      console.error('Social auth error:', error);
+      showDialog('Authentication Failed', 'Failed to authenticate. Please try again.');
+      setIsLoading(false);
+      setProvider(null);
+    } finally {
+      // loading state will be reset when user returns or on error above
+    }
+  };
+
+  const handleSendOtp = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!email) {
+      setOtpError('Please enter your email address.');
+      return;
+    }
+
+    setIsSendingOtp(true);
+    setOtpError(null);
+    setOtpMessage(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/schools/setup`,
+          data: {
+            is_school_admin: true,
+          },
+        },
+      });
+
+      if (error) {
+        console.error('OTP send error:', error);
+        setOtpError(error.message || 'Failed to send login code. Please try again.');
         return;
       }
 
-      if (data.user) {
-        // Check if email confirmation is required
-        if (data.session) {
-          // User is logged in immediately (email confirmation disabled)
-          setStep('school-info');
-        } else {
-          // Email confirmation required - show message and stay on auth step
-          showDialog(
-            '📧 Confirmation Email Sent!',
-            'Please check your email inbox and click the confirmation link to verify your email address.\n\nAfter confirming, you\'ll be redirected back here to complete your school registration.'
-          );
-          // Don't move to next step - user needs to confirm email first
-        }
-      }
+      setOtpSent(true);
+      setOtpCode('');
+      setOtpMessage('We emailed you a six-digit login code. Enter it below to continue.');
     } catch (error) {
-      console.error('Email signup error:', error);
-      showDialog('Signup Failed', 'Failed to create account. Please try again.');
+      console.error('Unexpected OTP send error:', error);
+      setOtpError('Something went wrong. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtp = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!email || !otpCode) {
+      setOtpError('Enter both your email and the code we sent.');
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    setOtpMessage(null);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token: otpCode,
+        type: 'email',
+      });
+
+      if (error) {
+        console.error('OTP verify error:', error);
+        setOtpError('Invalid or expired code. Please request a new one.');
+        return;
+      }
+
+      await supabase.auth.updateUser({
+        data: { is_school_admin: true },
+      });
+
+      setOtpMessage('Success! Continue below to finish setting up your school.');
+      setStep('school-info');
+      router.refresh();
+    } catch (error) {
+      console.error('Unexpected OTP verify error:', error);
+      setOtpError('Failed to verify the code. Please try again.');
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -195,122 +265,185 @@ export default function SchoolSignupForm() {
             </p>
           </div>
 
-          {/* Auth Method Toggle */}
-          <div className="flex gap-2 p-1 bg-muted rounded-lg">
+          {/* Social Login */}
+          <div className="space-y-3">
             <Button
-              onClick={() => setAuthMethod('social')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${authMethod === 'social'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-                }`}
+              type="button"
+              onClick={() => handleSocialAuth('google')}
+              disabled={isLoading}
+              className="w-full"
+              variant="outline"
             >
-              Social Login
+              {isLoading && provider === 'google' ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin">⏳</span>
+                  Connecting...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path
+                      fill="currentColor"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="currentColor"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="currentColor"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="currentColor"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                  Continue with Google
+                </span>
+              )}
             </Button>
+
             <Button
-              onClick={() => setAuthMethod('email')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${authMethod === 'email'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-                }`}
+              type="button"
+              onClick={() => handleSocialAuth('github')}
+              disabled={isLoading}
+              className="w-full"
+              variant="outline"
             >
-              Email & Password
+              {isLoading && provider === 'github' ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin">⏳</span>
+                  Connecting...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                  </svg>
+                  Continue with GitHub
+                </span>
+              )}
             </Button>
           </div>
 
-          {authMethod === 'social' ? (
-            <div className="space-y-3">
-              <Button
-                type="button"
-                onClick={() => handleSocialAuth('google')}
-                disabled={isLoading}
-                className="w-full"
-                variant="outline"
-              >
-                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                Continue with Google
-              </Button>
-
-              <Button
-                type="button"
-                onClick={() => handleSocialAuth('github')}
-                disabled={isLoading}
-                className="w-full"
-                variant="outline"
-              >
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                </svg>
-                Continue with GitHub
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-2 bg-card text-muted-foreground">
-                    Quick and secure with OAuth
-                  </span>
-                </div>
-              </div>
+          {/* Divider */}
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" aria-hidden="true" />
             </div>
-          ) : (
-            <form onSubmit={handleEmailSignup} className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1">
-                  Email Address
-                </label>
-                <input
-                  id="email"
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-card px-3 text-muted-foreground">or sign up with email</span>
+            </div>
+          </div>
+
+          {/* Email OTP Auth */}
+          {!otpSent ? (
+            <form onSubmit={handleSendOtp} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="admin-email">Work email</Label>
+                <Input
+                  id="admin-email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
                   placeholder="admin@yourschool.edu"
+                  autoComplete="email"
                   required
-                  className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
+                  disabled={isSendingOtp}
                 />
               </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-foreground mb-1">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  minLength={6}
-                  className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Must be at least 6 characters
-                </p>
-              </div>
-
-              <Button type="submit" disabled={isLoading} className="w-full">
-                {isLoading ? 'Creating Account...' : 'Create Account & Continue'}
+              {otpError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+                >
+                  {otpError}
+                </div>
+              )}
+              <Button type="submit" className="w-full" disabled={isSendingOtp}>
+                {isSendingOtp ? 'Sending code…' : 'Send login code'}
               </Button>
             </form>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setOtpCode('');
+                    setOtpError(null);
+                    setOtpMessage(null);
+                  }}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <p className="text-sm text-muted-foreground">{email}</p>
+              </div>
+
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="otp-code" className="text-center block">
+                    Enter the 6-digit code sent to your email
+                  </Label>
+                  <div className="flex justify-center">
+                    <InputOTP
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(value) => setOtpCode(value)}
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                </div>
+
+                {(otpMessage || otpError) && (
+                  <div
+                    role="status"
+                    className={`rounded-lg border p-3 text-sm ${otpError
+                      ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                      : 'border-primary/30 bg-primary/10 text-primary/90'
+                      }`}
+                  >
+                    {otpError || otpMessage}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={otpCode.length !== 6 || isVerifyingOtp}
+                  >
+                    {isVerifyingOtp ? 'Verifying…' : 'Verify and continue'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setOtpError(null);
+                      setOtpMessage(null);
+                      handleSendOtp(new Event('submit') as unknown as React.FormEvent<HTMLFormElement>);
+                    }}
+                    disabled={isSendingOtp}
+                  >
+                    {isSendingOtp ? 'Sending…' : 'Resend code'}
+                  </Button>
+                </div>
+              </form>
+            </div>
           )}
         </div>
 

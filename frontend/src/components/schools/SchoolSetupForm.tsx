@@ -33,17 +33,28 @@ export default function SchoolSetupForm({ userEmail }: SchoolSetupFormProps) {
   const [adminName, setAdminName] = useState('');
   const [maxStudents, setMaxStudents] = useState('50');
 
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState('');
+  const [dialogMessage, setDialogMessage] = useState('');
+
+  const showDialog = (title: string, message: string) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!schoolName || !adminName || !maxStudents) {
-      alert('Please fill in all fields');
+      showDialog('Missing Information', 'Please fill in all fields');
       return;
     }
 
     const seats = parseInt(maxStudents);
     if (isNaN(seats) || seats < 1) {
-      alert('Please enter a valid number of student seats');
+      showDialog('Invalid Input', 'Please enter a valid number of student seats');
       return;
     }
 
@@ -70,7 +81,10 @@ export default function SchoolSetupForm({ userEmail }: SchoolSetupFormProps) {
       router.push('/admin');
     } catch (error) {
       console.error('School registration error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to register school. Please try again.');
+      showDialog(
+        'Registration Failed',
+        error instanceof Error ? error.message : 'Failed to register school. Please try again.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -161,6 +175,20 @@ export default function SchoolSetupForm({ userEmail }: SchoolSetupFormProps) {
       <Button type="submit" disabled={isLoading} className="w-full">
         {isLoading ? 'Setting Up School...' : 'Complete Setup'}
       </Button>
+
+      <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{dialogTitle}</AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line">
+              {dialogMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

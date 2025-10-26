@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -166,6 +167,16 @@ function LoginForm() {
   return (
     <div className="min-h-screen  flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8 space-y-6">
+        {/* Back to Home Button */}
+        <div className="flex justify-start">
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+          </Link>
+        </div>
+
         {/* Header */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-foreground mb-2">

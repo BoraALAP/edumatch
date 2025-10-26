@@ -1,6 +1,16 @@
-import React, { useState, Children, useRef, useLayoutEffect, HTMLAttributes, ReactNode } from 'react';
+import React, {
+  useState,
+  Children,
+  useRef,
+  useLayoutEffect,
+  HTMLAttributes,
+  ReactNode,
+  ComponentProps,
+} from 'react';
 import { motion, AnimatePresence, Variants } from 'motion/react';
 import { Button } from './ui/button';
+
+type StepperButtonProps = Omit<ComponentProps<typeof Button>, 'onClick'>;
 
 interface StepperProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
@@ -11,8 +21,8 @@ interface StepperProps extends HTMLAttributes<HTMLDivElement> {
   stepContainerClassName?: string;
   contentClassName?: string;
   footerClassName?: string;
-  backButtonProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
-  nextButtonProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
+  backButtonProps?: StepperButtonProps;
+  nextButtonProps?: StepperButtonProps;
   backButtonText?: string;
   nextButtonText?: string;
   disableStepIndicators?: boolean;
@@ -32,8 +42,8 @@ export default function Stepper({
   stepContainerClassName = '',
   contentClassName = '',
   footerClassName = '',
-  backButtonProps = {},
-  nextButtonProps = {},
+  backButtonProps,
+  nextButtonProps,
   backButtonText = 'Back',
   nextButtonText = 'Continue',
   disableStepIndicators = false,
@@ -46,6 +56,12 @@ export default function Stepper({
   const totalSteps = stepsArray.length;
   const isCompleted = currentStep > totalSteps;
   const isLastStep = currentStep === totalSteps;
+
+  const backButtonConfig: StepperButtonProps = backButtonProps ?? {};
+  const nextButtonConfig: StepperButtonProps = nextButtonProps ?? {};
+
+  const { variant: backVariant = 'outline', ...restBackButtonProps } = backButtonConfig;
+  const { variant: nextVariant, ...restNextButtonProps } = nextButtonConfig;
 
   const updateStep = (newStep: number) => {
     setCurrentStep(newStep);
@@ -77,7 +93,7 @@ export default function Stepper({
 
   return (
     <div
-      className="flex min-h-full flex-1 flex-col items-center justify-center p-4 sm:aspect-[4/3] md:aspect-[2/1]"
+      className="flex  flex-1 flex-col items-center justify-center p-4 "
       {...rest}
     >
       <div
@@ -131,14 +147,16 @@ export default function Stepper({
               {currentStep !== 1 && (
                 <Button
                   onClick={handleBack}
-                  variant="outline"
+                  variant={backVariant}
+                  {...restBackButtonProps}
                 >
                   {backButtonText}
                 </Button>
               )}
               <Button
                 onClick={isLastStep ? handleComplete : handleNext}
-                {...nextButtonProps}
+                variant={nextVariant}
+                {...restNextButtonProps}
               >
                 {isLastStep ? 'Complete' : nextButtonText}
               </Button>
@@ -306,7 +324,7 @@ function StepConnector({ isComplete }: StepConnectorProps) {
   );
 }
 
-interface CheckIconProps extends React.SVGProps<SVGSVGElement> { }
+type CheckIconProps = React.SVGProps<SVGSVGElement>;
 
 function CheckIcon(props: CheckIconProps) {
   return (

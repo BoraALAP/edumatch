@@ -191,7 +191,7 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
       onError?.(err);
       return false;
     }
-  }, [requestPermission, sampleRate, onAudioData, onAudioLevel, onError, state.isCapturing]);
+  }, [requestPermission, sampleRate, onAudioData, onAudioLevel, onError]);
 
   /**
    * Stop capturing audio

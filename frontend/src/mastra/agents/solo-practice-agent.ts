@@ -12,6 +12,8 @@
  */
 
 import {
+  soloTextAgent,
+  buildSoloTextInstructions,
   runSoloTextAgent,
   generateTextStarterPrompt,
   type SoloTextContext,
@@ -33,6 +35,13 @@ export type PracticeType = 'text' | 'voice' | 'peer';
 
 // Agent instances cache
 const voiceAgentInstances = new Map<string, SoloVoiceAgent>();
+
+// Backward compatibility exports
+export const soloPracticeAgent = soloTextAgent;
+
+export function buildSoloPracticeInstructions(context: SoloPracticeContext): string {
+  return buildSoloTextInstructions(context);
+}
 
 /**
  * Run the solo practice agent (defaults to text mode for backward compatibility)
@@ -140,5 +149,6 @@ export function getVoiceSession(sessionId: string): SoloVoiceAgent | null {
  * Kept for backwards compatibility with existing code
  */
 export function hasGrammarCorrection(message: string): boolean {
+  void message;
   return false;
 }

@@ -4,4 +4,4 @@
  * Purpose: Central export for all voice functionality
  */
 
-export * from './voice-service';
+export * from './types';

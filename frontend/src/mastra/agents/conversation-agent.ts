@@ -33,10 +33,16 @@ export interface ConversationFeedback {
 export interface GrammarCorrectionResult {
   hasIssues: boolean;
   issues: Array<{
+    type?: string;
     original: string;
-    correction: string;
-    explanation: string;
+    correction?: string;
+    suggestion?: string;
+    explanation?: string;
     severity: 'minor' | 'moderate' | 'major';
+    position?: {
+      start: number;
+      end: number;
+    };
   }>;
   overallFeedback?: string;
 }
@@ -45,6 +51,7 @@ export interface TopicAdherenceResult {
   isOnTopic: boolean;
   score: number; // 0-100
   redirectionSuggestion?: string;
+  reasoning?: string;
 }
 
 /**
@@ -245,7 +252,28 @@ Text to check: "${text}"`;
   ]);
 
   try {
-    return JSON.parse(response.text || '{}');
+    const parsed = JSON.parse(response.text || '{}') as Partial<GrammarCorrectionResult>;
+    const issues = Array.isArray(parsed.issues)
+      ? parsed.issues.map((issue) => {
+          const explanation = issue.explanation;
+          const inferredType = explanation?.split(':')[0]?.trim().toLowerCase();
+          return {
+            type: issue.type || inferredType || 'grammar',
+            original: issue.original,
+            correction: issue.correction,
+            suggestion: issue.suggestion ?? issue.correction ?? issue.original,
+            explanation,
+            severity: issue.severity ?? 'minor',
+            position: issue.position,
+          };
+        })
+      : [];
+
+    return {
+      hasIssues: (parsed.hasIssues ?? issues.length > 0) && issues.length > 0,
+      issues,
+      overallFeedback: parsed.overallFeedback,
+    };
   } catch {
     return {
       hasIssues: false,

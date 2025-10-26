@@ -9,12 +9,11 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import MatchRequestsPanel, { MatchRequest } from '@/components/chat/MatchRequestsPanel';
 import ChatOverview from '@/components/dashboard/ChatOverview';
 import type { MatchStatus } from '@/types';
-import Image from 'next/image';
+import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 
 type ProfileSummary = {
   id: string;
@@ -42,6 +41,9 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single();
 
+  console.log(profile);
+
+
   // Debug logging
   if (profileError) {
     console.error('Dashboard - Profile Error:', profileError);
@@ -56,14 +58,19 @@ export default async function DashboardPage() {
     throw new Error(`Failed to fetch profile: ${profileError.message}`);
   }
 
-  // If no profile exists or onboarding not completed, redirect appropriately
-  if (!profile || !profile.onboarding_completed) {
-    // School admins go to school setup, others go to onboarding
-    if (profile?.role === 'school_admin') {
-      redirect('/schools/setup');
-    } else {
-      redirect('/onboarding');
-    }
+  // If no profile exists, redirect to onboarding
+  if (!profile) {
+    redirect('/onboarding');
+  }
+
+  // Handle school admins without a school
+  if (profile.role === 'school_admin' && !profile.school_id) {
+    redirect('/schools/setup');
+  }
+
+  // Handle students who haven't completed onboarding
+  if (profile.role !== 'school_admin' && !profile.onboarding_completed) {
+    redirect('/onboarding');
   }
 
   const isAdminUser = profile.role === 'school_admin' || profile.role === 'admin';
@@ -243,15 +250,7 @@ export default async function DashboardPage() {
         <Card className="border border-white/10 bg-background/60 p-6 backdrop-blur">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
-              {user.user_metadata?.avatar_url && (
-                <Image
-                  src={user.user_metadata.avatar_url}
-                  alt="Profile avatar"
-                  width={64}
-                  height={64}
-                  className="h-16 w-16 rounded-full object-cover"
-                />
-              )}
+              <ProfileAvatar profile={profile} email={user.email} />
               <div>
                 <h2 className="text-2xl font-semibold text-foreground">
                   Welcome back,  {profile.first_name || user.user_metadata?.full_name || user.email}!
@@ -350,15 +349,7 @@ export default async function DashboardPage() {
 
             <Card className="border border-white/10 bg-background/60 p-6 backdrop-blur">
               <div className="flex items-start gap-4">
-                <Avatar className="w-16 h-16">
-                  <AvatarImage
-                    src={profile.avatar_url || undefined}
-                    alt={profile.display_name || profile.full_name || 'Profile'}
-                  />
-                  <AvatarFallback className="bg-linear-to-br from-primary to-secondary text-primary-foreground text-xl font-semibold">
-                    {(profile.display_name || profile.full_name || user.email || 'U')[0].toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                <ProfileAvatar profile={profile} email={user.email} />
                 <div>
                   <h2 className="text-lg font-semibold text-foreground">
                     {profile.display_name || profile.full_name || user.email}

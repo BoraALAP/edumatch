@@ -22,10 +22,27 @@ export interface AIMessage {
 // ============================================================================
 
 export interface GrammarIssue {
+  type: string;
   original: string;
-  correction: string;
+  suggestion?: string;
+  correction?: string;
   explanation?: string;
   severity: 'minor' | 'moderate' | 'major';
+  position?: {
+    start: number;
+    end: number;
+  };
+  rule?: string;
+  category?:
+    | 'verb'
+    | 'noun'
+    | 'adjective'
+    | 'adverb'
+    | 'preposition'
+    | 'article'
+    | 'punctuation'
+    | 'other'
+    | string;
 }
 
 export interface GrammarCorrectionResult {
@@ -42,6 +59,7 @@ export interface TopicAdherenceResult {
   isOnTopic: boolean;
   score: number; // 0-100
   redirectionSuggestion?: string;
+  reasoning?: string;
 }
 
 // ============================================================================

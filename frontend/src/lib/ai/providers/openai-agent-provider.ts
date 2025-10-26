@@ -273,11 +273,14 @@ ${conversationText}`,
   // ============================================================================
 
   async transcribeAudio(audio: Blob): Promise<TranscriptionResult> {
+    void audio;
     // TODO: Implement using OpenAI Whisper API
     throw new Error('Voice transcription not yet implemented for OpenAI Agent provider');
   }
 
   async generateSpeech(text: string, options?: VoiceGenerationOptions): Promise<Blob> {
+    void text;
+    void options;
     // TODO: Implement using OpenAI TTS API
     throw new Error('Text-to-speech not yet implemented for OpenAI Agent provider');
   }
@@ -287,6 +290,7 @@ ${conversationText}`,
   // ============================================================================
 
   streamResponse(prompt: string): ReadableStream<string> {
+    void prompt;
     // TODO: Implement streaming with OpenAI Agents SDK
     throw new Error('Streaming not yet implemented for OpenAI Agent provider');
   }

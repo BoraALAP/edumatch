@@ -17,6 +17,11 @@ export interface SoloVoiceContext {
   voiceSpeaker?: string;
 }
 
+export type SoloVoiceAgent = Agent & {
+  voice: OpenAIRealtimeVoice;
+  disconnect: () => Promise<void>;
+};
+
 const LEVEL_GUIDANCE: Record<string, string> = {
   A1: '(Beginner: simple present/past tense, basic vocabulary, short sentences)',
   A2: '(Elementary: simple tenses, common phrases, familiar topics)',
@@ -67,22 +72,24 @@ Response style:
 
 export function generateVoiceStarterPrompt(context: {
   topic: string;
+  studentLevel?: string;
   learningGoals?: string[];
 }): string {
-  const { topic, learningGoals = [] } = context;
+  const { topic, studentLevel, learningGoals = [] } = context;
   const goalLine = learningGoals.length
     ? ` I'm excited to help you work on ${learningGoals.join(', ')} today.`
     : '';
+  const levelLine = studentLevel ? ` Let's aim for confident ${studentLevel} conversations.` : '';
 
-  return `Hi there! Let's practice speaking about "${topic}".${goalLine} As we chat, I'll give you gentle tips to improve your English. What comes to mind first when you think about this topic?`;
+  return `Hi there! Let's practice speaking about "${topic}".${goalLine}${levelLine} As we chat, I'll give you gentle tips to improve your English. What comes to mind first when you think about this topic?`;
 }
 
-export function createSoloVoiceAgent(context: SoloVoiceContext): Agent {
+export function createSoloVoiceAgent(context: SoloVoiceContext): SoloVoiceAgent {
   const voice = new OpenAIRealtimeVoice({
     apiKey: process.env.OPENAI_API_KEY,
     model: 'gpt-4o-mini-realtime-preview-2024-12-17',
     speaker: context.voiceSpeaker ?? 'alloy',
-    debug:true
+    debug: true,
   });
 
   const instructions = buildVoiceInstructions(context);
@@ -90,10 +97,16 @@ export function createSoloVoiceAgent(context: SoloVoiceContext): Agent {
   // Note: Session configuration (VAD, modalities, etc.) happens after voice.connect()
   // in the session store using voice.updateSession()
 
-  return new Agent({
+  const agent = new Agent({
     name: 'solo-voice-coach',
     model: openai('gpt-4o-mini'),
     instructions,
     voice,
-  });
+  }) as SoloVoiceAgent;
+
+  agent.disconnect = async () => {
+    voice.disconnect();
+  };
+
+  return agent;
 }

@@ -31,10 +31,10 @@ export const grammarCheckerTool = {
         hasIssues: significantIssues.length > 0,
         issueCount: significantIssues.length,
         issues: significantIssues.map(issue => ({
-          type: issue.type,
+          type: issue.type || 'grammar',
           severity: issue.severity,
           original: issue.original,
-          suggestion: issue.suggestion,
+          suggestion: issue.suggestion ?? issue.correction ?? issue.original,
           explanation: issue.explanation,
         })),
       };

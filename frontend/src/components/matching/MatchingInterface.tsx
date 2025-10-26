@@ -11,12 +11,14 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import type { Database } from '@/types/database.types';
 
 interface Profile {
   id: string;
@@ -34,6 +36,19 @@ interface MatchingInterfaceProps {
   userProfile: Profile;
 }
 
+type MatchPoolRow = {
+  profile_id: string;
+  display_name: string | null;
+  proficiency_level: string | null;
+  interests: string[] | null;
+  bio: string | null;
+};
+
+type ExistingMatchRecord = Pick<
+  Database['public']['Tables']['matches']['Row'],
+  'student1_id' | 'student2_id'
+>;
+
 export default function MatchingInterface({ userId, userProfile }: MatchingInterfaceProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -44,68 +59,7 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [isMatching, setIsMatching] = useState(false);
 
-  useEffect(() => {
-    fetchPotentialMatches();
-  }, []);
-
-  const fetchPotentialMatches = async () => {
-    setIsLoading(true);
-
-    try {
-      // Use RPC function that respects privacy boundaries
-      // Returns only profiles the user can match with (individuals or same school)
-      const { data, error } = await supabase
-        .rpc('rpc_get_my_matching_pool');
-
-      if (error) throw error;
-
-      if (data) {
-        // Get existing matches to exclude them
-        const { data: existingMatches } = await supabase
-          .from('matches')
-          .select('student1_id, student2_id')
-          .or(`student1_id.eq.${userId},student2_id.eq.${userId}`);
-
-        // Create a set of user IDs to exclude (already matched)
-        const excludedIds = new Set<string>();
-        if (existingMatches) {
-          existingMatches.forEach((match) => {
-            if (match.student1_id !== userId) excludedIds.add(match.student1_id);
-            if (match.student2_id !== userId && match.student2_id) excludedIds.add(match.student2_id);
-          });
-        }
-
-        // Filter out already matched users and map to Profile type
-        const filtered = data
-          .filter((profile: any) => !excludedIds.has(profile.profile_id))
-          .map((profile: any) => ({
-            id: profile.profile_id,
-            display_name: profile.display_name,
-            full_name: profile.display_name, // Use display_name as fallback
-            proficiency_level: profile.proficiency_level,
-            interests: profile.interests,
-            bio: profile.bio,
-            age: null, // Not included in RPC response
-            avatar_url: null, // Not included in RPC response
-          }));
-
-        // Sort by match quality (same level + shared interests)
-        const sorted = filtered.sort((a: any, b: any) => {
-          const aScore = calculateMatchScore(a);
-          const bScore = calculateMatchScore(b);
-          return bScore - aScore;
-        });
-
-        setPotentialMatches(sorted);
-      }
-    } catch (error) {
-      console.error('Error fetching matches:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const calculateMatchScore = (profile: Profile): number => {
+  const calculateMatchScore = useCallback((profile: Profile): number => {
     let score = 0;
 
     // Same proficiency level: +10 points
@@ -130,7 +84,85 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
     score += sharedInterests.length * 2;
 
     return score;
-  };
+  }, [userProfile.interests, userProfile.proficiency_level]);
+
+  const fetchPotentialMatches = useCallback(async () => {
+    setIsLoading(true);
+
+    try {
+      // Use RPC function that respects privacy boundaries
+      // Returns only profiles the user can match with (individuals or same school)
+      const { data, error } = await supabase
+        .rpc('rpc_get_my_matching_pool')
+        .returns<MatchPoolRow[]>();
+
+      if (error) throw error;
+
+      if (data) {
+        const matchingPool = Array.isArray(data) ? data : null;
+        if (!matchingPool) {
+          console.error('Unexpected matching pool response shape', data);
+          return;
+        }
+
+        // Get existing matches to exclude them
+        const { data: existingMatchesData, error: existingMatchesError } = await supabase
+          .from('matches')
+          .select('student1_id, student2_id')
+          .or(`student1_id.eq.${userId},student2_id.eq.${userId}`)
+          .returns<ExistingMatchRecord[]>();
+
+        if (existingMatchesError) throw existingMatchesError;
+        if (existingMatchesData && !Array.isArray(existingMatchesData)) {
+          console.error('Unexpected existing matches response shape', existingMatchesData);
+          return;
+        }
+        const existingMatches = (existingMatchesData ?? []) as ExistingMatchRecord[];
+
+        // Create a set of user IDs to exclude (already matched)
+        const excludedIds = new Set<string>();
+        existingMatches.forEach((match) => {
+          if (match.student1_id && match.student1_id !== userId) {
+            excludedIds.add(match.student1_id);
+          }
+          if (match.student2_id && match.student2_id !== userId) {
+            excludedIds.add(match.student2_id);
+          }
+        });
+
+        // Filter out already matched users and map to Profile type
+        const filtered: Profile[] = matchingPool
+          .filter((profile) => !excludedIds.has(profile.profile_id))
+          .map((profile) => ({
+            id: profile.profile_id,
+            display_name: profile.display_name,
+            full_name: profile.display_name, // Use display_name as fallback
+            proficiency_level: profile.proficiency_level,
+            interests: profile.interests,
+            bio: profile.bio,
+            age: null, // Not included in RPC response
+            avatar_url: null, // Not included in RPC response
+          }));
+
+        // Sort by match quality (same level + shared interests)
+        const sorted = filtered.sort((a, b) => {
+          const aScore = calculateMatchScore(a);
+          const bScore = calculateMatchScore(b);
+          return bScore - aScore;
+        });
+
+        setPotentialMatches(sorted);
+      }
+    } catch (error) {
+      console.error('Error fetching matches:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supabase, userId, calculateMatchScore]);
+
+  useEffect(() => {
+    void fetchPotentialMatches();
+  }, [fetchPotentialMatches]);
 
   const handleSwipe = async (direction: 'left' | 'right') => {
     if (isMatching || currentIndex >= potentialMatches.length) return;
@@ -251,10 +283,13 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
           <div className="flex items-start gap-4">
             <div className="w-24 h-24 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-4xl font-bold">
               {currentProfile.avatar_url ? (
-                <img
+                <Image
                   src={currentProfile.avatar_url}
                   alt={currentProfile.display_name || 'Profile'}
+                  width={96}
+                  height={96}
                   className="w-full h-full rounded-full object-cover"
+                  unoptimized
                 />
               ) : (
                 (currentProfile.display_name || currentProfile.full_name || 'U')[0].toUpperCase()
