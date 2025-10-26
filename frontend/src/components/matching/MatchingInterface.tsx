@@ -233,16 +233,16 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
     <div className="relative">
       {/* Card Stack Preview (show next card) */}
       {currentIndex + 1 < potentialMatches.length && (
-        <Card className="absolute top-2 left-2 right-2 h-[580px] bg-muted opacity-50" />
+        <Card className="absolute top-2 left-2 right-2 h-[580px] -z-10 bg-muted opacity-50" />
       )}
 
       {/* Main Card */}
       <Card
         className={`relative p-6 transition-all duration-300 ${swipeDirection === 'left'
-            ? 'translate-x-[-120%] rotate-[-20deg] opacity-0'
-            : swipeDirection === 'right'
-              ? 'translate-x-[120%] rotate-[20deg] opacity-0'
-              : 'translate-x-0 rotate-0 opacity-100'
+          ? 'translate-x-[-120%] rotate-[-20deg] opacity-0'
+          : swipeDirection === 'right'
+            ? 'translate-x-[120%] rotate-[20]  opacity-0'
+            : 'translate-x-0 rotate-0 opacity-100'
           }`}
       >
         {/* Profile Content */}

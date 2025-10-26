@@ -385,18 +385,16 @@ export default function SettingsClient({ school }: SettingsClientProps) {
                   Invitations need admin approval before users can join
                 </p>
               </div>
-              <button
+              <Button
                 onClick={() => setRequireApproval(!requireApproval)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  requireApproval ? 'bg-primary' : 'bg-muted'
-                }`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${requireApproval ? 'bg-primary' : 'bg-muted'
+                  }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
-                    requireApproval ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${requireApproval ? 'translate-x-6' : 'translate-x-1'
+                    }`}
                 />
-              </button>
+              </Button>
             </div>
 
             <div className="flex items-center justify-between p-4 border border-border rounded-lg">
@@ -406,18 +404,16 @@ export default function SettingsClient({ school }: SettingsClientProps) {
                   Automatically accept users from allowed domains
                 </p>
               </div>
-              <button
+              <Button
                 onClick={() => setAutoAcceptDomain(!autoAcceptDomain)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  autoAcceptDomain ? 'bg-primary' : 'bg-muted'
-                }`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoAcceptDomain ? 'bg-primary' : 'bg-muted'
+                  }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
-                    autoAcceptDomain ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${autoAcceptDomain ? 'translate-x-6' : 'translate-x-1'
+                    }`}
                 />
-              </button>
+              </Button>
             </div>
 
             <div>
@@ -441,12 +437,12 @@ export default function SettingsClient({ school }: SettingsClientProps) {
                 {allowedDomains.map((domain) => (
                   <Badge key={domain} variant="secondary" className="px-3 py-1">
                     {domain}
-                    <button
+                    <Button
                       onClick={() => handleRemoveDomain(domain)}
-                      className="ml-2 text-muted-foreground hover:text-foreground"
+
                     >
                       ×
-                    </button>
+                    </Button>
                   </Badge>
                 ))}
                 {allowedDomains.length === 0 && (

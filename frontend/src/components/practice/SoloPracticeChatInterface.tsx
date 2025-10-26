@@ -42,6 +42,8 @@ import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { MessageSquareIcon } from 'lucide-react';
+import CorrectionMessage from '@/components/chat/CorrectionMessage';
+import type { GrammarIssue } from '@/components/chat/GrammarIssueDetail';
 
 interface SoloPracticeSession {
   id: string;
@@ -68,6 +70,9 @@ interface SoloPracticeChatInterfaceProps {
 
 type PracticeMessage = UIMessage & {
   createdAt?: string | Date;
+  messageType?: 'text' | 'correction' | 'encouragement' | 'topic_redirect';
+  grammarIssues?: GrammarIssue[];
+  correctionSeverity?: 'minor' | 'moderate' | 'major';
 };
 
 const extractMessageText = (message?: PracticeMessage): string => {
@@ -144,8 +149,8 @@ export default function SoloPracticeChatInterface({
     async function loadMessages() {
       try {
         console.log('[DEBUG] Loading messages for session:', sessionId);
-        const { data, error } = await supabase
-          .from('solo_practice_messages')
+        const { data, error} = await supabase
+          .from('text_practice_messages')
           .select('*')
           .eq('session_id', sessionId)
           .order('created_at', { ascending: true });
@@ -158,7 +163,7 @@ export default function SoloPracticeChatInterface({
         console.log('[DEBUG] Loaded messages from DB:', data?.length || 0, 'messages');
 
         if (data && data.length > 0) {
-          // Convert DB messages to AI SDK UI message format
+          // Convert DB messages to AI SDK UI message format with correction metadata
           const msgs = data.map((msg: any) => ({
             id: msg.id,
             role: msg.role,
@@ -169,6 +174,9 @@ export default function SoloPracticeChatInterface({
               },
             ],
             createdAt: msg.created_at ? new Date(msg.created_at) : undefined,
+            messageType: msg.message_type || 'text',
+            grammarIssues: msg.grammar_issues || undefined,
+            correctionSeverity: msg.correction_severity || undefined,
           }));
           console.log('[DEBUG] Converted messages:', msgs);
           setInitialMessages(msgs);
@@ -211,10 +219,12 @@ function ChatInterface({
   initialMessages,
 }: SoloPracticeChatInterfaceProps & { initialMessages: PracticeMessage[] }) {
   const supabase = createClient();
+  const [realtimeMessages, setRealtimeMessages] = useState<PracticeMessage[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const chat = useChat<PracticeMessage>({
     id: sessionId,
-    // initialMessages,
+    // Note: useChat doesn't support initialMessages - we merge them in combinedMessages instead
     transport: new DefaultChatTransport({
       api: '/api/practice/chat',
       body: {
@@ -231,29 +241,121 @@ function ChatInterface({
 
   const { messages, status, error } = chat;
 
-  const combinedMessages = useMemo(() => {
-    const seen = new Set<string>();
-    const merged: PracticeMessage[] = [];
+  // Subscribe to real-time messages (user messages, corrections, AND AI responses from DB)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`text_practice:${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'text_practice_messages',
+          filter: `session_id=eq.${sessionId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as any;
 
-    for (const message of [...initialMessages, ...messages]) {
-      const key = createMessageKey(message);
-      if (seen.has(key)) {
-        continue;
+          console.log('[DEBUG] Real-time message received:', newMsg.role, newMsg.message_type);
+
+          // Add ALL messages from DB (user messages, corrections, and responses)
+          // This ensures proper ordering based on DB timestamps
+          const formattedMsg: PracticeMessage = {
+            id: newMsg.id,
+            role: newMsg.role,
+            parts: [{ type: 'text', text: newMsg.content }],
+            createdAt: newMsg.created_at ? new Date(newMsg.created_at) : undefined,
+            messageType: newMsg.message_type || 'text',
+            grammarIssues: newMsg.grammar_issues,
+            correctionSeverity: newMsg.correction_severity,
+          };
+
+          setRealtimeMessages((prev) => {
+            console.log('[DEBUG] Adding to realtime messages, count:', prev.length + 1);
+            return [...prev, formattedMsg];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sessionId, supabase]);
+
+  const combinedMessages = useMemo(() => {
+    // Use Map for better deduplication - prefer messages with DB IDs
+    const messageMap = new Map<string, PracticeMessage>();
+    const now = Date.now();
+
+    // Process in order: initialMessages → realtimeMessages (with DB data) → streaming messages
+    // This ensures DB messages take precedence over streaming messages
+    const allMessages = [...initialMessages, ...realtimeMessages, ...messages];
+
+    console.log('[DEBUG] Processing messages:', {
+      initialCount: initialMessages.length,
+      realtimeCount: realtimeMessages.length,
+      streamingCount: messages.length,
+      total: allMessages.length
+    });
+
+    for (const message of allMessages) {
+      // Create content-based key for deduplication
+      const contentKey = `${message.role}-${extractMessageText(message)}`;
+
+      const existingMsg = messageMap.get(contentKey);
+
+      // Prefer messages with database IDs (from real-time) over streaming messages
+      const hasDbId = typeof message.id === 'string' && message.id.length > 10;
+      const existingHasDbId = existingMsg && typeof existingMsg.id === 'string' && existingMsg.id.length > 10;
+
+      if (!existingMsg || (hasDbId && !existingHasDbId)) {
+        // Ensure all messages have timestamps
+        if (!message.createdAt) {
+          message.createdAt = new Date(now);
+        }
+
+        // Ensure messageType is set (default to 'text' if not set)
+        if (!message.messageType && message.role === 'assistant') {
+          message.messageType = 'text';
+        }
+
+        messageMap.set(contentKey, message);
       }
-      seen.add(key);
-      merged.push(message);
     }
 
-    return merged;
-  }, [initialMessages, messages]);
+    // Convert map to array and sort
+    const merged = Array.from(messageMap.values());
 
-  const visibleMessages = useMemo(
-    () =>
-      combinedMessages.filter(
-        (message) => message.role === 'user' || message.role === 'assistant'
-      ),
-    [combinedMessages]
-  );
+    console.log('[DEBUG] After deduplication:', merged.length, 'messages');
+
+    // Sort by timestamp AND message type to ensure corrections appear before AI responses
+    return merged.sort((a, b) => {
+      const aTime = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : a.createdAt.getTime()) : 0;
+      const bTime = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : b.createdAt.getTime()) : 0;
+
+      // If timestamps are within 5 seconds, prioritize corrections over conversation
+      const timeDiff = Math.abs(aTime - bTime);
+      if (timeDiff < 5000) {
+        const aIsCorrection = a.messageType === 'correction';
+        const bIsCorrection = b.messageType === 'correction';
+
+        // Corrections should appear before non-corrections when timestamps are close
+        if (aIsCorrection && !bIsCorrection) return -1;
+        if (!aIsCorrection && bIsCorrection) return 1;
+      }
+
+      return aTime - bTime;
+    });
+  }, [initialMessages, realtimeMessages, messages]);
+
+  const visibleMessages = useMemo(() => {
+    const filtered = combinedMessages.filter(
+      (message) => message.role === 'user' || message.role === 'assistant'
+    );
+    console.log('[DEBUG] Visible messages:', filtered.length);
+    return filtered;
+  }, [combinedMessages]);
 
   const visibleMessageCount = visibleMessages.length;
   const messageLabel = visibleMessageCount === 1 ? 'message' : 'messages';
@@ -262,51 +364,101 @@ function ChatInterface({
   const handlePromptSubmit = async ({ text }: PromptInputMessage) => {
     const userMessage = text?.trim();
 
+    console.log('[DEBUG] Submit handler called with:', userMessage);
+
     if (!userMessage) {
       throw new Error('EMPTY_MESSAGE');
     }
 
-    if (isStreaming) {
-      throw new Error('STREAM_IN_PROGRESS');
+    // Prevent duplicate submissions
+    if (isStreaming || isSubmitting) {
+      console.log('[DEBUG] Submission blocked:', { isStreaming, isSubmitting });
+      throw new Error('SUBMISSION_IN_PROGRESS');
     }
 
-    const { error: insertError } = await supabase
-      .from('solo_practice_messages')
-      .insert({
-        session_id: sessionId,
-        role: 'user',
-        content: userMessage,
-      });
-
-    if (insertError) {
-      console.error('Error saving user message:', insertError);
-      throw insertError;
-    }
-
-    const { error: countError } = await supabase.rpc(
-      'increment_session_message_count',
-      {
-        p_session_id: sessionId,
-        p_is_correction: false,
-      }
-    );
-
-    if (countError) {
-      console.error('Error updating session message count:', countError);
-      throw countError;
-    }
+    setIsSubmitting(true);
+    console.log('[DEBUG] Starting message submission');
 
     try {
-      await chat.sendMessage({ text: userMessage });
+      // Start AI conversation immediately for responsive UI
+      // This adds the user message to the chat interface right away
+      console.log('[DEBUG] Calling chat.sendMessage');
+      const sendPromise = chat.sendMessage({ text: userMessage });
+      console.log('[DEBUG] chat.sendMessage called, promise created');
+
+      // Run DB save and grammar analysis in parallel (non-blocking)
+      const messageIndex = combinedMessages.filter(m => m.role === 'user').length;
+
+      // Save to database in background
+      (async () => {
+        try {
+          const { data: savedMessage, error: insertError } = await supabase
+            .from('text_practice_messages')
+            .insert({
+              session_id: sessionId,
+              role: 'user',
+              content: userMessage,
+              message_type: 'text',
+            })
+            .select()
+            .single();
+
+          if (insertError || !savedMessage) {
+            console.error('Error saving user message:', insertError);
+            return;
+          }
+
+          // Update message count
+          try {
+            await supabase.rpc('increment_session_message_count', {
+              p_session_id: sessionId,
+              p_is_correction: false,
+            });
+          } catch (err) {
+            console.error('Error updating message count:', err);
+          }
+
+          // Run grammar analysis (non-blocking)
+          try {
+            const response = await fetch('/api/practice/analyze-message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId,
+                userMessageId: savedMessage.id,
+                message: userMessage,
+                studentLevel: session.proficiency_level || profile.proficiency_level,
+                messageIndex,
+                grammarFocus: session.grammar_focus || [],
+              }),
+            });
+
+            const result = await response.json();
+            console.log('[Grammar Analysis]', result);
+            if (result.shouldCorrect) {
+              console.log('[Correction Created]', result.correction);
+            }
+          } catch (err) {
+            console.error('Grammar analysis error:', err);
+          }
+        } catch (err) {
+          console.error('Error in message flow:', err);
+        }
+      })();
+
+      // Wait for AI response to complete (but user message already shown)
+      await sendPromise;
     } catch (sendError) {
       console.error('Error sending chat message:', sendError);
       throw sendError;
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      <header className="border-b border-border bg-card px-4 py-3">
+    <div className="flex h-full flex-col bg-background overflow-hidden">
+      <header className="border-b border-border bg-card px-4 py-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="text-primary hover:text-primary/90">
@@ -332,10 +484,9 @@ function ChatInterface({
       </header>
 
       <Conversation
-        className="relative size-full"
-        style={{ height: '498px' }}
+        className="relative flex-1 overflow-hidden"
       >
-        <ConversationContent>
+        <ConversationContent className="mx-auto w-full max-w-4xl">
           {visibleMessages.length === 0 ? (
             <ConversationEmptyState
               description="Messages will appear here as the conversation progresses."
@@ -351,13 +502,17 @@ function ChatInterface({
                 isAssistant && messageText.trim().length === 0 && isStreaming;
               const timestampAlignment = isAssistant ? 'self-start' : 'self-end';
 
+              // Check if this is a correction message
+              const isCorrection = isAssistant && message.messageType === 'correction';
+
               return (
                 <Message from={isAssistant ? 'assistant' : 'user'} key={key}>
                   <div className="flex max-w-3xl flex-col gap-1">
                     <MessageContent
                       className={cn(
                         'w-fit max-w-xl whitespace-pre-wrap wrap-break-word leading-relaxed text-sm',
-                        isAssistant ? 'self-start' : 'self-end'
+                        isAssistant ? 'self-start' : 'self-end',
+                        isCorrection && 'bg-transparent p-0'
                       )}
                     >
                       {isAssistant ? (
@@ -366,6 +521,13 @@ function ChatInterface({
                             <Loader size={16} />
                             Coach is typing…
                           </span>
+                        ) : isCorrection ? (
+                          <CorrectionMessage
+                            content={messageText}
+                            grammarIssues={message.grammarIssues}
+                            severity={message.correctionSeverity}
+                            showDetails
+                          />
                         ) : (
                           <Response>{messageText}</Response>
                         )
@@ -384,7 +546,10 @@ function ChatInterface({
                   </div>
                   {isAssistant && (
                     <MessageAvatar
-                      className="bg-secondary text-secondary-foreground"
+                      className={cn(
+                        'bg-secondary text-secondary-foreground',
+                        isCorrection && 'ring-amber-200 dark:ring-amber-300/40'
+                      )}
                       name="AI"
                       src="/ai-coach.svg"
                     />
@@ -398,18 +563,18 @@ function ChatInterface({
       </Conversation>
 
       {error && (
-        <div className="bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <div className="bg-destructive/10 px-4 py-2 text-sm text-destructive shrink-0">
           {error.message || 'We had trouble responding. Please try again.'}
         </div>
       )}
 
-      <div className="border-t border-border bg-card p-4">
+      <div className="border-t border-border bg-card p-4 shrink-0">
         <div className="mx-auto w-full max-w-4xl space-y-2">
           <PromptInputProvider>
             <PromptInput onSubmit={handlePromptSubmit}>
               <PromptInputBody>
                 <PromptInputTextarea
-                  disabled={isStreaming}
+                  disabled={isStreaming || isSubmitting}
                   placeholder="Type your message..."
                   rows={2}
                 />
@@ -418,7 +583,11 @@ function ChatInterface({
                 <span className="text-xs text-muted-foreground">
                   Press Enter to send • Shift+Enter for new line
                 </span>
-                <PromptSubmitButton isStreaming={isStreaming} status={status} />
+                <PromptSubmitButton
+                  isStreaming={isStreaming}
+                  isSubmitting={isSubmitting}
+                  status={status}
+                />
               </PromptInputFooter>
             </PromptInput>
           </PromptInputProvider>
@@ -434,12 +603,14 @@ function ChatInterface({
 function PromptSubmitButton({
   status,
   isStreaming,
+  isSubmitting,
 }: {
   status: ChatStatus;
   isStreaming: boolean;
+  isSubmitting: boolean;
 }) {
   const { textInput } = usePromptInputController();
-  const isDisabled = isStreaming || !textInput.value.trim();
+  const isDisabled = isStreaming || isSubmitting || !textInput.value.trim();
 
   return (
     <PromptInputSubmit

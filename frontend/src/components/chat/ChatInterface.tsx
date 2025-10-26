@@ -35,6 +35,7 @@ import { Loader } from '@/components/ai-elements/loader';
 import { Response } from '@/components/ai-elements/response';
 import { cn } from '@/lib/utils';
 import { Loader2Icon, MessageSquareIcon, SendIcon } from 'lucide-react';
+import CorrectionMessage from './CorrectionMessage';
 
 const formatTimestamp = (value?: string | Date | null): string => {
   if (!value) {
@@ -226,7 +227,8 @@ export default function ChatInterface({
 
       if (error) throw error;
 
-      void fetch('/api/chat/ai-moderate', {
+      // Call AI moderation - consume stream for instant corrections
+      fetch('/api/chat/ai-moderate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -234,7 +236,22 @@ export default function ChatInterface({
           message: trimmedMessage,
           topic: match.curriculum_topic?.title || 'General Conversation',
         }),
-      }).catch((err) => console.error('AI moderation error:', err));
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error('AI moderation failed');
+          }
+
+          // Consume the stream to trigger immediate processing
+          const reader = response.body?.getReader();
+          if (reader) {
+            while (true) {
+              const { done } = await reader.read();
+              if (done) break;
+            }
+          }
+        })
+        .catch((err) => console.error('AI moderation error:', err));
     } catch (error) {
       console.error('Error sending message:', error);
       alert('Failed to send message. Please try again.');
@@ -258,7 +275,7 @@ export default function ChatInterface({
                   src={otherUser.avatar_url || undefined}
                   alt={otherUser.display_name || otherUser.full_name || 'Partner'}
                 />
-                <AvatarFallback className="bg-linear-to-br from-primary to-secondary text-primary-foreground text-lg font-bold">
+                <AvatarFallback className="text-lg font-bold">
                   {(otherUser.display_name || otherUser.full_name || 'U')[0].toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -315,22 +332,28 @@ export default function ChatInterface({
                 <div className="flex max-w-3xl flex-col gap-1">
                   <MessageContent
                     className={cn(
-                      'w-fit max-w-xl whitespace-pre-wrap break-words leading-relaxed text-sm',
+                      'w-fit max-w-xl whitespace-pre-wrap wrap-break-words leading-relaxed text-sm',
                       item.role === 'assistant' ? 'self-start' : 'self-end',
-                      item.isAI && item.isCorrection
-                        ? 'group-[.is-assistant]:bg-amber-100 group-[.is-assistant]:text-amber-900 dark:group-[.is-assistant]:bg-amber-200/10 dark:group-[.is-assistant]:text-amber-100'
-                        : item.isAI
-                          ? 'group-[.is-assistant]:bg-secondary/80'
-                          : ''
+                      item.isAI && !item.isCorrection
+                        ? 'group-[.is-assistant]:bg-secondary/80'
+                        : '',
+                      item.isAI && item.isCorrection && 'bg-transparent p-0'
                     )}
                   >
                     {item.isAI ? (
-                      <>
-                        <p className="mb-1 text-xs font-medium text-muted-foreground">
-                          {item.isCorrection ? 'Grammar Tip' : 'AI Assistant'}
-                        </p>
-                        <Response>{item.content}</Response>
-                      </>
+                      item.isCorrection ? (
+                        <CorrectionMessage
+                          content={item.content}
+                          variant="compact"
+                        />
+                      ) : (
+                        <>
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">
+                            AI Assistant
+                          </p>
+                          <Response>{item.content}</Response>
+                        </>
+                      )
                     ) : (
                       <p>{item.content}</p>
                     )}

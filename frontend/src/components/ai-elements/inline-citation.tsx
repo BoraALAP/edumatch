@@ -22,6 +22,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { Button } from '@/components/ui/button';
 
 export type InlineCitationProps = ComponentProps<"span">;
 
@@ -199,7 +200,7 @@ export const InlineCitationCarouselPrev = ({
   }, [api]);
 
   return (
-    <button
+    <Button
       aria-label="Previous"
       className={cn("shrink-0", className)}
       onClick={handleClick}
@@ -207,7 +208,7 @@ export const InlineCitationCarouselPrev = ({
       {...props}
     >
       <ArrowLeftIcon className="size-4 text-muted-foreground" />
-    </button>
+    </Button>
   );
 };
 
@@ -226,7 +227,7 @@ export const InlineCitationCarouselNext = ({
   }, [api]);
 
   return (
-    <button
+    <Button
       aria-label="Next"
       className={cn("shrink-0", className)}
       onClick={handleClick}
@@ -234,7 +235,7 @@ export const InlineCitationCarouselNext = ({
       {...props}
     >
       <ArrowRightIcon className="size-4 text-muted-foreground" />
-    </button>
+    </Button>
   );
 };
 

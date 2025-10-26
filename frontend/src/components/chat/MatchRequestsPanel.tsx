@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 interface MatchRequestProfile {
   id: string;
@@ -56,6 +57,8 @@ export default function MatchRequestsPanel({
   if (incoming.length === 0 && outgoing.length === 0) {
     return null;
   }
+
+  console.log(outgoingRequests);
 
   const formatName = (profile: MatchRequestProfile | null) =>
     profile?.display_name || profile?.full_name || 'Anonymous user';
@@ -122,17 +125,15 @@ export default function MatchRequestsPanel({
                   className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex flex-1 items-start gap-3">
-                    <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary to-secondary text-lg font-bold text-primary-foreground sm:flex">
-                      {requester?.avatar_url ? (
-                        <img
-                          src={requester.avatar_url}
-                          alt={formatName(requester)}
-                          className="h-full w-full rounded-full object-cover"
-                        />
-                      ) : (
-                        formatName(requester)[0].toUpperCase()
-                      )}
-                    </div>
+                    <Avatar className="hidden h-12 w-12 sm:flex">
+                      <AvatarImage
+                        src={requester?.avatar_url || undefined}
+                        alt={formatName(requester)}
+                      />
+                      <AvatarFallback className="text-lg font-bold">
+                        {formatName(requester)[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium text-foreground">{formatName(requester)}</p>
@@ -195,6 +196,8 @@ export default function MatchRequestsPanel({
           </div>
           <ul className="space-y-3">
             {outgoing.map((match) => {
+              console.log(match);
+
               const partner = match.student2;
 
               return (

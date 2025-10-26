@@ -197,26 +197,24 @@ export default function SchoolSignupForm() {
 
           {/* Auth Method Toggle */}
           <div className="flex gap-2 p-1 bg-muted rounded-lg">
-            <button
+            <Button
               onClick={() => setAuthMethod('social')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                authMethod === 'social'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${authMethod === 'social'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+                }`}
             >
               Social Login
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setAuthMethod('email')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                authMethod === 'email'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${authMethod === 'email'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+                }`}
             >
               Email & Password
-            </button>
+            </Button>
           </div>
 
           {authMethod === 'social' ? (

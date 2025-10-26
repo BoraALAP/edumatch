@@ -17,50 +17,14 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Upload, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import Stepper, { Step } from '../StepperCard';
-
-const LANGUAGE_LEVELS = [
-  { value: 'A1', label: 'A1', description: 'Beginner - I can understand and use basic phrases' },
-  { value: 'A2', label: 'A2', description: 'Elementary - I can communicate in simple tasks' },
-  { value: 'B1', label: 'B1', description: 'Intermediate - I can handle most daily situations' },
-  { value: 'B2', label: 'B2', description: 'Upper Intermediate - I can express myself fluently' },
-  { value: 'C1', label: 'C1', description: 'Advanced - I can use language flexibly' },
-  { value: 'C2', label: 'C2', description: 'Proficient - I have mastery of the language' },
-];
-
-const INTERESTS = [
-  '🎬 Movies & TV',
-  '🎮 Gaming',
-  '📚 Books & Reading',
-  '🎵 Music',
-  '⚽ Sports',
-  '✈️ Travel',
-  '🍳 Cooking',
-  '🎨 Art',
-  '💻 Technology',
-  '🔬 Science',
-  '📱 Social Media',
-  '🏋️ Fitness',
-  '🐕 Animals',
-  '🌱 Nature',
-  '🎭 Theater',
-  '📸 Photography',
-];
-
-const LEARNING_GOALS = [
-  'Improve conversational fluency',
-  'Prepare for exams (TOEFL, IELTS, etc.)',
-  'Practice for job interviews',
-  'Learn business English',
-  'Improve pronunciation',
-  'Expand vocabulary',
-  'Practice grammar',
-  'Make international friends',
-  'Travel preparation',
-  'Academic writing',
-  'Casual conversation practice',
-  'Professional development',
-];
+import Stepper, { Step } from '@/components//StepperCard';
+import { Button } from '@/components/ui/button';
+import { SelectionButton } from '@/components/ui/selection-button';
+import {
+  LANGUAGE_LEVELS,
+  TOPICS_AND_INTERESTS,
+  LEARNING_GOALS,
+} from '@/constants/onboarding';
 
 interface OnboardingFormProps {
   userId: string;
@@ -310,32 +274,17 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
 
             <div className="space-y-3">
               {LANGUAGE_LEVELS.map((level) => (
-                <button
+                <SelectionButton
                   key={level.value}
+                  label={level.label}
+                  description={level.description}
                   onClick={() => {
                     setProficiencyLevel(level.value);
                     setErrors({ ...errors, proficiencyLevel: undefined });
                   }}
-                  className={`w-full text-left p-4 border-2 rounded-lg transition-all ${
-                    proficiencyLevel === level.value
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-foreground">{level.label}</div>
-                      <div className="text-sm text-muted-foreground">{level.description}</div>
-                    </div>
-                    {proficiencyLevel === level.value && (
-                      <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                        <svg className="w-4 h-4 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                </button>
+                  isSelected={proficiencyLevel === level.value}
+                  className="w-full"
+                />
               ))}
             </div>
 
@@ -355,26 +304,17 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
             </p>
 
             <div className="grid grid-cols-2 gap-3">
-              {INTERESTS.map((interest) => (
-                <button
+              {TOPICS_AND_INTERESTS.map((interest) => (
+                <SelectionButton
                   key={interest}
+                  label={interest}
                   onClick={() => {
                     toggleInterest(interest);
                     setErrors({ ...errors, interests: undefined });
                   }}
                   disabled={!selectedInterests.includes(interest) && selectedInterests.length >= 5}
-                  className={`p-4 border-2 rounded-lg text-left transition-all ${
-                    selectedInterests.includes(interest)
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50'
-                  } ${
-                    !selectedInterests.includes(interest) && selectedInterests.length >= 5
-                      ? 'opacity-50 cursor-not-allowed'
-                      : ''
-                  }`}
-                >
-                  <span className="font-medium">{interest}</span>
-                </button>
+                  isSelected={selectedInterests.includes(interest)}
+                />
               ))}
             </div>
 
@@ -395,25 +335,16 @@ export default function OnboardingForm({ userId }: OnboardingFormProps) {
 
             <div className="grid grid-cols-1 gap-3">
               {LEARNING_GOALS.map((goal) => (
-                <button
+                <SelectionButton
                   key={goal}
+                  label={goal}
                   onClick={() => {
                     toggleLearningGoal(goal);
                     setErrors({ ...errors, learningGoals: undefined });
                   }}
                   disabled={!learningGoals.includes(goal) && learningGoals.length >= 3}
-                  className={`p-4 border-2 rounded-lg text-left transition-all ${
-                    learningGoals.includes(goal)
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50'
-                  } ${
-                    !learningGoals.includes(goal) && learningGoals.length >= 3
-                      ? 'opacity-50 cursor-not-allowed'
-                      : ''
-                  }`}
-                >
-                  <span className="font-medium">{goal}</span>
-                </button>
+                  isSelected={learningGoals.includes(goal)}
+                />
               ))}
             </div>
 

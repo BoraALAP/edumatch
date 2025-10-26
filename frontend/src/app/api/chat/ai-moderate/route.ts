@@ -71,14 +71,18 @@ export async function POST(request: NextRequest) {
             senderType
           })}\n\n`));
 
-          // Stream the response character by character
-          for (const char of aiResponse) {
+          // Stream the response in chunks for better performance
+          const CHUNK_SIZE = 5; // characters per chunk
+          for (let i = 0; i < aiResponse.length; i += CHUNK_SIZE) {
+            const chunk = aiResponse.slice(i, i + CHUNK_SIZE);
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({
               type: 'token',
-              content: char
+              content: chunk
             })}\n\n`));
-            // Small delay for visual effect
-            await new Promise(resolve => setTimeout(resolve, 30));
+            // Minimal delay for natural streaming feel (5ms per chunk)
+            if (i + CHUNK_SIZE < aiResponse.length) {
+              await new Promise(resolve => setTimeout(resolve, 5));
+            }
           }
 
           // Insert the complete message in database

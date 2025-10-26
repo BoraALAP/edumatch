@@ -19,28 +19,16 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { SelectionButton } from '@/components/ui/selection-button';
+import {
+  Field,
+  FieldLabel,
+  FieldDescription,
+  FieldGroup,
+} from '@/components/ui/field';
 import { useRouter } from 'next/navigation';
-
-const LANGUAGE_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-
-const INTERESTS = [
-  '🎬 Movies & TV',
-  '🎮 Gaming',
-  '📚 Books & Reading',
-  '🎵 Music',
-  '⚽ Sports',
-  '✈️ Travel',
-  '🍳 Cooking',
-  '🎨 Art',
-  '💻 Technology',
-  '🔬 Science',
-  '📱 Social Media',
-  '🏋️ Fitness',
-  '🐕 Animals',
-  '🌱 Nature',
-  '🎭 Theater',
-  '📸 Photography',
-];
+import { TOPICS_AND_INTERESTS, LANGUAGE_LEVELS } from '@/constants/onboarding';
 
 interface Profile {
   id: string;
@@ -309,90 +297,78 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
           </div>
         ) : (
           // Edit Mode
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">Display Name</label>
-              <input
+          <FieldGroup>
+            <Field>
+              <FieldLabel>Display Name</FieldLabel>
+              <Input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Enter your display name"
-                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">Age</label>
-              <input
+            <Field>
+              <FieldLabel>Age</FieldLabel>
+              <Input
                 type="number"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
                 placeholder="Enter your age"
                 min="13"
                 max="100"
-                className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
               />
-            </div>
+              <FieldDescription>You must be between 13 and 100 years old</FieldDescription>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">Language Level</label>
-              <div className="grid grid-cols-3 gap-2">
-                {LANGUAGE_LEVELS.map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => setProficiencyLevel(level)}
-                    className={`px-4 py-2 border-2 rounded-lg transition-all ${proficiencyLevel === level
-                        ? 'border-primary bg-primary/10 text-primary/90'
-                        : 'border-border hover:border-border'
-                      }`}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                Bio
-              </label>
+            <Field>
+              <FieldLabel>Bio</FieldLabel>
               <Textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell us about yourself..."
                 rows={6}
                 maxLength={500}
-                className="w-full"
               />
-              <p className="text-sm text-muted-foreground mt-1">{bio.length}/500 characters</p>
-            </div>
+              <FieldDescription>{bio.length}/500 characters</FieldDescription>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                Interests (select 3-5)
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {INTERESTS.map((interest) => (
-                  <button
-                    key={interest}
-                    onClick={() => toggleInterest(interest)}
-                    disabled={!selectedInterests.includes(interest) && selectedInterests.length >= 5}
-                    className={`p-3 border-2 rounded-lg text-left transition-all ${selectedInterests.includes(interest)
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-border'
-                      } ${!selectedInterests.includes(interest) && selectedInterests.length >= 5
-                        ? 'opacity-50 cursor-not-allowed'
-                        : ''
-                      }`}
-                  >
-                    <span className="font-medium">{interest}</span>
-                  </button>
+            <Field>
+              <FieldLabel>Language Level</FieldLabel>
+              <FieldDescription>Select your current English proficiency level</FieldDescription>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {LANGUAGE_LEVELS.map((level) => (
+                  <SelectionButton
+                    key={level.value}
+                    label={level.label}
+                    onClick={() => setProficiencyLevel(level.value)}
+                    isSelected={proficiencyLevel === level.value}
+                    description={level.description}
+                  />
                 ))}
               </div>
-              <p className="text-sm text-muted-foreground mt-2">
+            </Field>
+
+            <Field>
+              <FieldLabel>Interests (select 3-5)</FieldLabel>
+              <FieldDescription>
+                Choose topics you&apos;d like to discuss with your practice partners
+              </FieldDescription>
+              <div className="grid grid-cols-2 gap-2">
+                {TOPICS_AND_INTERESTS.map((interest) => (
+                  <SelectionButton
+                    key={interest}
+                    label={interest}
+                    onClick={() => toggleInterest(interest)}
+                    disabled={!selectedInterests.includes(interest) && selectedInterests.length >= 5}
+                    isSelected={selectedInterests.includes(interest)}
+                  />
+                ))}
+              </div>
+              <FieldDescription>
                 Selected: {selectedInterests.length}/5
-              </p>
-            </div>
+              </FieldDescription>
+            </Field>
 
             <div className="flex gap-3 pt-4">
               <Button onClick={handleSave} disabled={isSaving}>
@@ -402,7 +378,7 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
                 Cancel
               </Button>
             </div>
-          </div>
+          </FieldGroup>
         )}
       </Card>
 

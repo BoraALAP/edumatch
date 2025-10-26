@@ -29,7 +29,7 @@ export default async function PracticeSessionPage({ params }: PracticeSessionPag
 
   // Get session details
   const { data: session, error: sessionError } = await supabase
-    .from('solo_practice_sessions')
+    .from('text_practice_sessions')
     .select('*')
     .eq('id', sessionId)
     .single();

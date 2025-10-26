@@ -1,8 +1,13 @@
 /**
  * Login Page
  *
- * Provides social authentication options for users to sign in.
- * Supports Google and GitHub OAuth providers.
+ * Purpose: User authentication page with multiple sign-in options
+ * Features:
+ * - Social authentication (Google, GitHub)
+ * - Email-based OTP authentication
+ * - Two-step flow: email input → OTP verification
+ * - Uses InputOTP component for secure 6-digit code entry
+ * - Responsive design with shadcn UI components
  */
 
 'use client';
@@ -12,6 +17,12 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from '@/components/ui/input-otp';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertDialog,
@@ -22,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ArrowLeft } from 'lucide-react';
 
 function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -60,6 +72,12 @@ function LoginForm() {
       provider: providerName,
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          // Force account selection for Google and GitHub
+          prompt: 'select_account',
+          // For Google, this ensures user sees the account picker
+          access_type: 'offline',
+        },
       },
     });
 
@@ -170,11 +188,11 @@ function LoginForm() {
         )}
 
         {/* Social Login Buttons */}
-        <div className="space-y-3">
+        <div className="space-y-3 flex flex-col gap-2">
           <Button
             onClick={() => handleSocialLogin('google')}
             disabled={isLoading}
-            className="w-full h-12 text-base"
+
             variant="outline"
           >
             {isLoading && provider === 'google' ? (
@@ -207,10 +225,10 @@ function LoginForm() {
             )}
           </Button>
 
-          <Button
+          {/* <Button
             onClick={() => handleSocialLogin('github')}
             disabled={isLoading}
-            className="w-full h-12 text-base bg-foreground hover:bg-foreground/90"
+
           >
             {isLoading && provider === 'github' ? (
               <span className="flex items-center gap-2">
@@ -225,7 +243,7 @@ function LoginForm() {
                 Continue with GitHub
               </span>
             )}
-          </Button>
+          </Button> */}
         </div>
 
         {/* Divider */}
@@ -239,12 +257,11 @@ function LoginForm() {
         </div>
 
         {/* Email OTP Login */}
-        <div className="space-y-4">
-          <form className="space-y-3" onSubmit={handleSendOtp}>
-            <div className="space-y-1">
-              <label htmlFor="email" className="text-sm font-medium text-muted-foreground">
-                Email address
-              </label>
+        {!otpSent ? (
+          // Step 1: Email Input
+          <form className="space-y-4" onSubmit={handleSendOtp}>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email address</Label>
               <Input
                 id="email"
                 type="email"
@@ -253,54 +270,104 @@ function LoginForm() {
                 placeholder="you@example.com"
                 autoComplete="email"
                 required
+                disabled={isSendingOtp}
               />
             </div>
+            {otpError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+              >
+                {otpError}
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={isSendingOtp}>
-              {isSendingOtp ? 'Sending code…' : otpSent ? 'Resend code' : 'Send login code'}
+              {isSendingOtp ? 'Sending code…' : 'Send login code'}
             </Button>
           </form>
-
-          <form className="space-y-3" onSubmit={handleVerifyOtp}>
-            <div className="space-y-1">
-              <label htmlFor="otp" className="text-sm font-medium text-muted-foreground">
-                One-time code
-              </label>
-              <Input
-                id="otp"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                value={otpCode}
-                onChange={(event) => {
-                  const digitsOnly = event.target.value.replace(/\D/g, '').slice(0, 6);
-                  setOtpCode(digitsOnly);
+        ) : (
+          // Step 2: OTP Verification
+          <div className="space-y-4">
+            {/* Back button and email display */}
+            <div className="flex items-center justify-between">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtpCode('');
+                  setOtpError(null);
+                  setOtpMessage(null);
                 }}
-                placeholder="Enter 6-digit code"
-                disabled={!otpSent}
-              />
-            </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={!otpSent || otpCode.length !== 6 || isVerifyingOtp}
-            >
-              {isVerifyingOtp ? 'Verifying…' : 'Verify and sign in'}
-            </Button>
-          </form>
 
-          {(otpMessage || otpError) && (
-            <div
-              role="status"
-              className={`rounded-lg border p-3 text-sm ${otpError
-                  ? 'border-destructive/40 bg-destructive/10 text-destructive'
-                  : 'border-primary/30 bg-primary/10 text-primary/90'
-                }`}
-            >
-              {otpError || otpMessage}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <p className="text-sm text-muted-foreground">{email}</p>
             </div>
-          )}
-        </div>
+
+            <form className="space-y-4" onSubmit={handleVerifyOtp}>
+              <div className="space-y-2">
+                <Label htmlFor="otp" className="text-center block">
+                  Enter the 6-digit code sent to your email
+                </Label>
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(value) => setOtpCode(value)}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+              </div>
+
+              {(otpMessage || otpError) && (
+                <div
+                  role="status"
+                  className={`rounded-lg border p-3 text-sm ${otpError
+                    ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                    : 'border-primary/30 bg-primary/10 text-primary/90'
+                    }`}
+                >
+                  {otpError || otpMessage}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={otpCode.length !== 6 || isVerifyingOtp}
+                >
+                  {isVerifyingOtp ? 'Verifying…' : 'Verify and sign in'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setOtpError(null);
+                    setOtpMessage(null);
+                    handleSendOtp(new Event('submit') as unknown as React.FormEvent<HTMLFormElement>);
+                  }}
+                  disabled={isSendingOtp}
+                >
+                  {isSendingOtp ? 'Sending…' : 'Resend code'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="text-center text-sm text-muted-foreground">

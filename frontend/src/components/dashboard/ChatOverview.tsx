@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from '@/components/ui/empty';
 import { MessageSquare, Archive } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -44,7 +45,6 @@ const getInitials = (name: string) => name.slice(0, 1).toUpperCase();
 
 export default function ChatOverview({ matches, currentUserId }: ChatOverviewProps) {
   const supabase = createClient();
-  const [view, setView] = useState<'active' | 'archived'>('active');
   const [unreadCounts, setUnreadCounts] = useState<Map<string, number>>(
     new Map(matches.map(m => [m.id, m.unread_count || 0]))
   );
@@ -99,57 +99,25 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
     return { activeMatches: active, archivedMatches: archived };
   }, [matches]);
 
-  const currentList = view === 'active' ? activeMatches : archivedMatches;
-
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-border px-6 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Chats</h2>
-          <p className="text-sm text-muted-foreground">
-            Switch between your current and archived conversations.
-          </p>
-        </div>
-        <div className="inline-flex rounded-full border border-border bg-muted p-1">
-          {(
-            [
-              { key: 'active' as const, label: `Active (${activeMatches.length})` },
-              { key: 'archived' as const, label: `Archived (${archivedMatches.length})` },
-            ]
-          ).map((option) => {
-            const isSelected = view === option.key;
-            return (
-              <button
-                key={option.key}
-                type="button"
-                className={`rounded-full px-3 py-1 text-sm font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${isSelected ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                onClick={() => setView(option.key)}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {currentList.length === 0 ? (
+  const renderChatList = (chatList: ChatSummary[], type: 'active' | 'archived') => {
+    if (chatList.length === 0) {
+      return (
         <Empty className="border-0 px-6 py-10">
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              {view === 'active' ? <MessageSquare /> : <Archive />}
+              {type === 'active' ? <MessageSquare /> : <Archive />}
             </EmptyMedia>
             <EmptyTitle>
-              {view === 'active' ? 'No active chats yet' : 'No archived chats yet'}
+              {type === 'active' ? 'No active chats yet' : 'No archived chats yet'}
             </EmptyTitle>
             <EmptyDescription>
-              {view === 'active'
+              {type === 'active'
                 ? 'Accept a pending request or find a new partner to start chatting.'
                 : 'Archived conversations will appear here after they end.'}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            {view === 'active' ? (
+            {type === 'active' ? (
               <Button asChild>
                 <Link href="/matches">Find a new partner</Link>
               </Button>
@@ -160,72 +128,105 @@ export default function ChatOverview({ matches, currentUserId }: ChatOverviewPro
             )}
           </EmptyContent>
         </Empty>
-      ) : (
-        <ul className="divide-y divide-border">
-          {currentList.map((match) => {
-            const unreadCount = unreadCounts.get(match.id) || 0;
-            const hasUnread = unreadCount > 0;
-            return (
-              <li key={match.id}>
-                <Link
-                  href={match.session_type === 'solo' ? `/practice/${match.id}` : `/chat/${match.id}`}
-                  className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted ${hasUnread ? 'bg-primary/10' : ''
-                    }`}
-                >
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold ${match.session_type === 'solo'
-                    ? 'bg-linear-to-br from-purple-500 to-pink-500 text-white'
-                    : 'bg-linear-to-br from-primary to-secondary text-primary-foreground'
-                    }`}>
-                    {match.session_type === 'solo' ? (
-                      <span className="text-2xl">🤖</span>
-                    ) : match.partner?.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={match.partner.avatar_url}
-                        alt={match.partner.name}
-                        className="h-full w-full rounded-full object-cover"
-                      />
-                    ) : (
-                      getInitials(match.partner?.name || 'U')
+      );
+    }
+
+    return (
+      <ul className="divide-y divide-border">
+        {chatList.map((match) => {
+          const unreadCount = unreadCounts.get(match.id) || 0;
+          const hasUnread = unreadCount > 0;
+          return (
+            <li key={match.id}>
+              <Link
+                href={match.session_type === 'solo' ? `/practice/${match.id}` : `/chat/${match.id}`}
+                className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted ${hasUnread ? 'bg-primary/10' : ''
+                  }`}
+              >
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold ${match.session_type === 'solo'
+                  ? 'bg-linear-to-br from-purple-500 to-pink-500 text-white'
+                  : 'bg-linear-to-br from-primary to-secondary text-primary-foreground'
+                  }`}>
+                  {match.session_type === 'solo' ? (
+                    <span className="text-2xl">🤖</span>
+                  ) : match.partner?.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={match.partner.avatar_url}
+                      alt={match.partner.name}
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  ) : (
+                    getInitials(match.partner?.name || 'U')
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-foreground truncate">
+                      {match.partner?.name || 'Conversation'}
+                    </p>
+                    {match.session_type === 'solo' && (
+                      <Badge variant="default" className="text-xs bg-purple-500">
+                        Solo Practice
+                      </Badge>
+                    )}
+                    {match.partner?.proficiency_level && (
+                      <Badge variant="secondary" className="text-xs">
+                        {match.partner.proficiency_level}
+                      </Badge>
                     )}
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-foreground truncate">
-                        {match.partner?.name || 'Conversation'}
-                      </p>
-                      {match.session_type === 'solo' && (
-                        <Badge variant="default" className="text-xs bg-purple-500">
-                          Solo Practice
-                        </Badge>
-                      )}
-                      {match.partner?.proficiency_level && (
-                        <Badge variant="secondary" className="text-xs">
-                          {match.partner.proficiency_level}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                      <span>Updated {formatDate(match.updated_at)}</span>
-                      {match.matched_interests.length > 0 && (
-                        <span>
-                          {match.matched_interests[0]}
-                          {match.matched_interests.length > 1 && ` +${match.matched_interests.length - 1} more`}
-                        </span>
-                      )}
-                    </div>
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <span>Updated {formatDate(match.updated_at)}</span>
+                    {match.matched_interests.length > 0 && (
+                      <span>
+                        {match.matched_interests[0]}
+                        {match.matched_interests.length > 1 && ` +${match.matched_interests.length - 1} more`}
+                      </span>
+                    )}
                   </div>
+                </div>
 
-                  <div className="text-sm text-muted-foreground capitalize">
-                    {match.status}
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                <div className="text-sm text-muted-foreground capitalize">
+                  {match.status}
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <Tabs defaultValue="active" className="w-full">
+        <div className="flex flex-col gap-4 border-b border-border px-6 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Chats</h2>
+            <p className="text-sm text-muted-foreground">
+              Switch between your current and archived conversations.
+            </p>
+          </div>
+          <TabsList>
+            <TabsTrigger value="active">
+              Active ({activeMatches.length})
+            </TabsTrigger>
+            <TabsTrigger value="archived">
+              Archived ({archivedMatches.length})
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="active" className="m-0">
+          {renderChatList(activeMatches, 'active')}
+        </TabsContent>
+
+        <TabsContent value="archived" className="m-0">
+          {renderChatList(archivedMatches, 'archived')}
+        </TabsContent>
+      </Tabs>
     </Card>
   );
 }

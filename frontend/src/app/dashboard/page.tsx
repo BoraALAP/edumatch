@@ -14,6 +14,7 @@ import Link from 'next/link';
 import MatchRequestsPanel, { MatchRequest } from '@/components/chat/MatchRequestsPanel';
 import ChatOverview from '@/components/dashboard/ChatOverview';
 import type { MatchStatus } from '@/types';
+import Image from 'next/image';
 
 type ProfileSummary = {
   id: string;
@@ -70,13 +71,23 @@ export default async function DashboardPage() {
   // Fetch peer matches
   const { data: matchRows } = await supabase
     .from('matches')
-    .select('*')
+    .select('* ')
     .or(`student1_id.eq.${user.id},student2_id.eq.${user.id}`)
     .order('updated_at', { ascending: false });
 
-  // Fetch solo practice sessions
-  const { data: soloSessions } = await supabase
-    .from('solo_practice_sessions')
+  console.log("matchRows", matchRows);
+
+
+  // Fetch text practice sessions
+  const { data: textSessions } = await supabase
+    .from('text_practice_sessions')
+    .select('*')
+    .eq('student_id', user.id)
+    .order('updated_at', { ascending: false });
+
+  // Fetch voice practice sessions
+  const { data: voiceSessions } = await supabase
+    .from('voice_practice_sessions')
     .select('*')
     .eq('student_id', user.id)
     .order('updated_at', { ascending: false });
@@ -92,9 +103,12 @@ export default async function DashboardPage() {
   const { data: participantProfiles } = participantIds.length
     ? await supabase
       .from('profiles')
-      .select('id, display_name, full_name, avatar_url, proficiency_level')
+      .select('id, first_name, last_name, display_name, full_name, avatar_url, proficiency_level')
       .in('id', participantIds)
     : { data: [] as ProfileSummary[] };
+
+  console.log("participantProfiles", participantProfiles);
+
 
   const profileMap = new Map<string, ProfileSummary>(
     (participantProfiles ?? []).map((participant) => [participant.id, participant])
@@ -108,12 +122,17 @@ export default async function DashboardPage() {
 
   const decoratedMatches = allMatches.map(attachProfiles);
 
+  console.log("decoratedMatches", decoratedMatches);
+
   const incomingRequests = decoratedMatches.filter(
     (match) => match.status === 'pending' && match.student2_id === user.id
   ) as MatchRequest[];
   const outgoingRequests = decoratedMatches.filter(
     (match) => match.status === 'pending' && match.student1_id === user.id
   ) as MatchRequest[];
+
+
+
 
   const pendingRequestCount = incomingRequests.length;
 
@@ -152,24 +171,40 @@ export default async function DashboardPage() {
       };
     });
 
-  // Convert solo sessions to summaries
-  const soloSessionSummaries = (soloSessions ?? []).map((session) => ({
+  // Convert text practice sessions to summaries
+  const textSessionSummaries = (textSessions ?? []).map((session) => ({
     id: session.id,
     status: (session.status === 'active' ? 'active' : session.status === 'completed' ? 'ended' : 'cancelled') as MatchStatus,
     updated_at: session.updated_at || session.created_at,
     matched_interests: [session.topic],
     partner: {
-      id: 'ai-coach',
-      name: 'AI Practice Coach',
+      id: 'ai-coach-text',
+      name: 'AI Text Coach',
       avatar_url: null,
       proficiency_level: session.proficiency_level || profile.proficiency_level,
     },
-    unread_count: 0, // Solo sessions don't have unread counts yet
+    unread_count: 0,
     session_type: 'solo' as const,
   }));
 
-  // Merge peer matches and solo sessions
-  const matchSummaries = [...peerMatchSummaries, ...soloSessionSummaries].sort((a, b) => {
+  // Convert voice practice sessions to summaries
+  const voiceSessionSummaries = (voiceSessions ?? []).map((session) => ({
+    id: session.id,
+    status: (session.status === 'active' ? 'active' : session.status === 'completed' ? 'ended' : 'cancelled') as MatchStatus,
+    updated_at: session.updated_at || session.created_at,
+    matched_interests: [session.topic],
+    partner: {
+      id: 'ai-coach-voice',
+      name: 'AI Voice Coach',
+      avatar_url: null,
+      proficiency_level: session.proficiency_level || profile.proficiency_level,
+    },
+    unread_count: 0,
+    session_type: 'solo' as const,
+  }));
+
+  // Merge peer matches, text sessions, and voice sessions
+  const matchSummaries = [...peerMatchSummaries, ...textSessionSummaries, ...voiceSessionSummaries].sort((a, b) => {
     const dateA = new Date(a.updated_at || 0).getTime();
     const dateB = new Date(b.updated_at || 0).getTime();
     return dateB - dateA; // Most recent first
@@ -184,7 +219,7 @@ export default async function DashboardPage() {
             <h1 className="text-2xl font-bold text-foreground">EduMatch Dashboard</h1>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {isAdminUser && (
-                <Button asChild variant="secondary" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
+                <Button asChild variant="secondary" >
                   <Link href="/admin">Admin Panel</Link>
                 </Button>
               )}
@@ -192,7 +227,7 @@ export default async function DashboardPage() {
                 <Button
                   type="submit"
                   variant="outline"
-                  className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+
                 >
                   Sign Out
                 </Button>
@@ -206,21 +241,38 @@ export default async function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Welcome Card */}
         <Card className="border border-white/10 bg-background/60 p-6 backdrop-blur">
-          <div className="flex items-center gap-4">
-            {user.user_metadata?.avatar_url && (
-              <img
-                src={user.user_metadata.avatar_url}
-                alt="Profile"
-                className="w-16 h-16 rounded-full"
-              />
-            )}
-            <div>
-              <h2 className="text-2xl font-semibold text-foreground">
-                Welcome back,  {profile.first_name || user.user_metadata?.full_name || user.email}!
-              </h2>
-              <p className="text-muted-foreground mt-1">
-                Ready to practice your English conversation skills?
-              </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              {user.user_metadata?.avatar_url && (
+                <Image
+                  src={user.user_metadata.avatar_url}
+                  alt="Profile avatar"
+                  width={64}
+                  height={64}
+                  className="h-16 w-16 rounded-full object-cover"
+                />
+              )}
+              <div>
+                <h2 className="text-2xl font-semibold text-foreground">
+                  Welcome back,  {profile.first_name || user.user_metadata?.full_name || user.email}!
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  Ready to practice your English conversation skills?
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:ml-4">
+              <Button asChild>
+                <Link href="/voice-practice">Start Voice Practice</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/practice">Solo Practice</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/matches">Find a Partner</Link>
+              </Button>
             </div>
           </div>
         </Card>
@@ -240,7 +292,7 @@ export default async function DashboardPage() {
                     asChild
                     variant="outline"
                     size="sm"
-                    className="border-white/20 text-white hover:bg-white/10"
+
                   >
                     <Link href="/chat">See all</Link>
                   </Button>
@@ -269,6 +321,18 @@ export default async function DashboardPage() {
                 asChild
               >
                 <Link href="/practice">Start Solo Practice</Link>
+              </Button>
+            </Card>
+
+            <Card className="border border-primary/30 bg-primary/5 p-6 backdrop-blur">
+              <div className="mb-4 space-y-2">
+                <h2 className="text-lg font-semibold text-foreground">Try Voice Practice</h2>
+                <p className="text-sm text-muted-foreground">
+                  Speak with the AI coach in real time. We’ll track pronunciation, fluency, and accent so you can review feedback afterward.
+                </p>
+              </div>
+              <Button asChild>
+                <Link href="/voice-practice">Start Voice Session</Link>
               </Button>
             </Card>
 
@@ -326,7 +390,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="mt-6">
-                <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                <Button asChild variant="outline" >
                   <Link href="/profile">Edit profile</Link>
                 </Button>
               </div>

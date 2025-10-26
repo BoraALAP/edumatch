@@ -8,10 +8,10 @@
  * - Mastra agent for AI orchestration
  * - Vercel AI SDK for streaming
  * - Real-time grammar corrections
- * - Saves AI responses to solo_practice_messages table
+ * - Saves AI responses to text_practice_messages table
  */
 
-import { streamText, type CoreMessage, type LanguageModel } from 'ai';
+import { streamText, type CoreMessage, type LanguageModel, convertToCoreMessages } from 'ai';
 import {
   soloPracticeAgent,
   buildSoloPracticeInstructions,
@@ -25,13 +25,6 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
     const { messages, data } = await req.json();
-
-    type PracticeMessage = {
-      role: 'user' | 'assistant' | 'system';
-      content: string;
-    };
-
-    const incomingMessages = (messages as PracticeMessage[]) ?? [];
 
     const supabase = await createClient();
 
@@ -51,11 +44,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Convert UI messages to core messages using AI SDK utility
+    const coreMessages: CoreMessage[] = convertToCoreMessages(messages ?? []);
+
     // Build conversation history for context
     const conversationHistory: Array<{ role: 'student' | 'coach'; content: string }> =
-      incomingMessages.slice(0, -1).map((msg) => ({
+      coreMessages.slice(0, -1).map((msg) => ({
         role: msg.role === 'user' ? 'student' : 'coach',
-        content: msg.content,
+        content: typeof msg.content === 'string' ? msg.content :
+          msg.content.map(part => part.type === 'text' ? part.text : '').join(''),
       }));
 
     const systemInstructions = buildSoloPracticeInstructions({
@@ -65,12 +62,6 @@ export async function POST(req: NextRequest) {
       conversationHistory,
       grammarFocus,
     });
-
-    // Convert UI messages to core messages using AI SDK utility
-    const coreMessages: CoreMessage[] = incomingMessages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
 
     // Stream response using AI SDK
     const result = streamText({
@@ -84,7 +75,7 @@ export async function POST(req: NextRequest) {
           // Detect if response contains correction
           const hasCorrection = hasGrammarCorrection(text);
 
-          await supabase.from('solo_practice_messages').insert({
+          await supabase.from('text_practice_messages').insert({
             session_id: sessionId,
             role: 'assistant',
             content: text,
