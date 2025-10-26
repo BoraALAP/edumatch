@@ -36,6 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
+import Threads from '@/components/Threads';
 
 interface VoicePracticeSession {
   id: string;
@@ -786,8 +787,17 @@ export default function VoicePracticeSession({
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-hidden bg-background">
-        <div className="max-w-5xl mx-auto h-full flex flex-col p-4 gap-4">
+      <main className="flex-1 overflow-hidden bg-background relative">
+        {/* Threads Visual Background */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none">
+          <Threads
+            amplitude={1}
+            distance={0}
+            enableMouseInteraction={false}
+          />
+        </div>
+
+        <div className="max-w-5xl mx-auto h-full flex flex-col p-4 gap-4 relative z-10">
           {/* Error Display */}
           {error && (
             <Card className="p-4 bg-destructive/10 border-destructive/40">
