@@ -382,7 +382,7 @@ export default async function DashboardPage() {
 
               <div className="mt-6">
                 <Button asChild variant="outline" >
-                  <Link href="/profile">Edit profile</Link>
+                  <Link href="/profile">Settings</Link>
                 </Button>
               </div>
             </Card>

@@ -5,14 +5,17 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
   // Sign out the user with scope 'global' to clear all sessions
   await supabase.auth.signOut({ scope: 'global' });
 
-  // Redirect to login page
-  return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'));
+  // Get the origin from the request to construct the redirect URL
+  const origin = request.nextUrl.origin;
+
+  // Redirect to login page using the request's origin
+  return NextResponse.redirect(new URL('/login', origin));
 }

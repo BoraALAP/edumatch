@@ -2,11 +2,35 @@
 
 ## Overview
 
-**EduMatch** is an AI-assisted speaking-practice platform for schools and students.  
-The platform connects students based on shared interests and proficiency levels, enabling **AI-moderated real-time conversations** in text or voice.  
+**EduMatch** is an AI-assisted speaking-practice platform for schools and students.
+The platform connects students based on shared interests and proficiency levels, enabling **AI-moderated real-time conversations** in text or voice.
 AI agents listen, correct grammar, redirect topic drift, and provide post-session feedback aligned with school curricula.
 
-Agents are built using the **OpenAI Agent Builder** and integrated into the Next.js + Supabase architecture via the **AI SDK** (`@openai/ai-sdk`) following the documentation at [openai.github.io/openai-agents-js](https://openai.github.io/openai-agents-js/).
+Agents are built using the **Mastra Framework** (primary) with OpenAI as a fallback provider, integrated into the Next.js + Supabase architecture via the **AI SDK** (`@ai-sdk/react`, `@ai-sdk/openai`).
+
+### Current Implementation Status (Latest)
+
+**✅ Fully Implemented:**
+- Solo text practice with AI coach (with initial greeting message)
+- Comprehensive grammar checking (checks every message, shows ✓ for correct messages)
+- Real-time message streaming with AI SDK
+- Profile management with learning goals
+- Peer-to-peer matching system
+- Toast notifications (no browser alerts)
+- Clickable avatar upload component
+- Real-time chat with Supabase Realtime
+
+**🚧 In Progress:**
+- Session reports and feedback generation
+- Voice practice sessions
+- Database table cleanup
+- Grammar component unification
+
+**📋 Planned:**
+- Finish chat button with report generation
+- Teacher dashboards
+- Curriculum management
+- Assessment and grading
 
 ---
 ## 0. Tech
@@ -14,16 +38,18 @@ Agents are built using the **OpenAI Agent Builder** and integrated into the Next
 1. Use command to do the installs 
 2. Use MCP to create or check the healt
 
-** use ** 
-- Supabase
-- NextJS
-- Vercel
-- Stripe
-- OpenAI Agents
-- Shadcn
-- AI SDK
-- Lucide Icon
-- Shadcn based UI Libraries
+** use **
+- Supabase (with Supabase MCP)
+- NextJS 15 (App Router)
+- Vercel (deployment)
+- Stripe (future - payments)
+- Mastra Framework (primary AI provider)
+- OpenAI Agents (fallback provider)
+- Shadcn UI components
+- AI SDK (@ai-sdk/react, @ai-sdk/openai)
+- Lucide Icons
+- Sonner (toast notifications)
+- PNPM (package manager)
 
 ---
 
@@ -48,13 +74,21 @@ Agents are built using the **OpenAI Agent Builder** and integrated into the Next
 
 **Purpose:** Observe 1-to-1 student conversations and provide real-time grammar correction, topic alignment, and vocabulary guidance.
 
+**Current Implementation:**
+- ✅ Analyzes EVERY user message for grammar errors
+- ✅ Checks all error types: grammar, spelling, vocabulary, idioms, punctuation
+- ✅ Marks correct messages with checkmark (✓)
+- ✅ Shows corrections inline using CorrectionMessage component
+- ✅ Stores detailed grammar analysis in database for reports
+- ✅ Level-appropriate feedback (A1-C2)
+
 **Behaviors**
-- Monitors text or transcript stream.
-- Detects grammar and phrasing issues.
-- Sends brief, encouraging corrections.
-- Identifies off-topic messages and nudges conversation back.
-- Maintains tone: friendly, peer-like, and educational.
-- Observes cooldown: no more than one correction every ~30 seconds or 2 user turns.
+- Monitors text or transcript stream via Supabase Realtime
+- Detects ALL language errors (grammar, spelling, vocabulary, idioms)
+- Sends brief, encouraging corrections via AI service
+- Identifies off-topic messages and redirects conversation
+- Maintains tone: friendly, peer-like, and educational
+- Analyzes every message but displays corrections strategically
 
 **Context Input**
 - Student profiles (names, levels, interests, school, topic).
@@ -71,15 +105,26 @@ Agents are built using the **OpenAI Agent Builder** and integrated into the Next
 
 **Purpose:** Engage individual learners in real-time voice or text conversation to practice specific topics.
 
+**Current Implementation:**
+- ✅ Text-based solo practice with streaming AI responses
+- ✅ AI sends randomized greeting to start conversation
+- ✅ Real-time grammar analysis with checkmarks for correct messages
+- ✅ Session tracking in text_practice_sessions table
+- ✅ Message history with grammar metadata
+- 🚧 Voice practice (separate implementation)
+
 **Behaviors**
-- Uses OpenAI Realtime Voice (or text if voice unavailable).
-- Adjusts complexity of questions and corrections to the student’s level (A1–C1).
-- Keeps conversation within assigned topic.
-- Provides live encouragement and post-session summary.
+- Starts conversation with friendly AI greeting
+- Uses AI SDK streaming for responsive text chat
+- Analyzes user messages in background (non-blocking)
+- Adjusts complexity based on student level (A1–C2)
+- Keeps conversation within assigned topic
+- Provides real-time corrections and encouragement
 
 **Context Input**
-- Student level, current focus grammar, topic keywords.
-- Voice model configuration (OpenAI or ElevenLabs).
+- Student level, learning goals, topic selection
+- Grammar focus areas (optional)
+- Conversation history for context
 
 ---
 
@@ -168,16 +213,34 @@ Agents are built using the **OpenAI Agent Builder** and integrated into the Next
 
 **Solution:** Sliding Window + Rolling Summaries
 
-**Messages Table - Per-Message Analytics:**
+**Messages Tables - Per-Message Analytics:**
+
+**Peer Chat (matches + messages):**
 ```
 messages:
   - content (text) - actual message
   - message_type (enum) - text/voice/system/correction/redirect
-  - grammar_issues (jsonb) - detailed grammar analysis for reports
-  - ai_correction (text) - AI's suggested correction shown to students
-  - topic_relevance_score (numeric) - per-message topic adherence
-  - audio_url, transcript, audio_duration - for voice messages
+  - grammar_issues (jsonb) - detailed grammar analysis
+  - ai_correction (text) - AI's suggested correction
+  - topic_relevance_score (numeric) - topic adherence
+  - audio_url, transcript, audio_duration - for voice
   - read_by (uuid[]) - message read tracking
+```
+
+**Solo Practice (text_practice_sessions + text_practice_messages):**
+```
+text_practice_messages:
+  - session_id (uuid) - FK to text_practice_sessions
+  - role (text) - 'user' or 'assistant'
+  - content (text) - message text
+  - message_type (text) - 'text', 'correction', 'encouragement'
+  - grammar_issues (jsonb) - detailed error analysis
+  - ai_correction (text) - correction text
+  - correction_severity (text) - 'minor', 'moderate', 'major'
+  - is_correct (boolean) - ✅ NEW: true if no grammar errors
+  - has_correction (boolean) - whether correction was shown
+  - corrected_message_id (uuid) - links correction to original message
+  - created_at (timestamp)
 ```
 
 **Conversation Summaries Table - Compressed Context:**
@@ -252,12 +315,22 @@ Sensitive data (emails, API keys) never leave MCP boundaries.
 
 ## 7. Widget & Frontend Integration
 
-- Agents exposed to the Next.js frontend through **AI SDK widgets**:
-  - `<ChatWidget />` for real-time peer chat.  
-  - `<PracticeWidget />` for solo voice sessions.  
-  - `<FeedbackWidget />` for post-session summaries.
-- Widgets communicate with agents through secure MCP channels.
-- State synchronized via Supabase Realtime.
+**Current Components:**
+- ✅ `<SoloPracticeChatInterface />` - AI SDK-based solo text practice with streaming
+- ✅ `<ChatInterface />` - Peer-to-peer chat with real-time updates
+- ✅ `<CorrectionMessage />` - Grammar correction display component
+- ✅ `<AvatarUpload />` - Clickable avatar upload with preview
+- ✅ `<MatchingInterface />` - Tinder-style partner matching
+- ✅ `<ProfileEditor />` - Profile management with learning goals
+- 🚧 `<VoicePracticeSession />` - Voice practice (in progress)
+- 📋 `<FeedbackWidget />` - Session summaries (planned)
+
+**Integration Patterns:**
+- AI SDK `useChat` hook for streaming conversations
+- Supabase Realtime for live message updates
+- Toast notifications (Sonner) for user feedback
+- Server components fetch data, client components handle interactivity
+- AI service abstraction layer (@/lib/ai) supports multiple providers
 
 ---
 
@@ -315,13 +388,45 @@ Sensitive data (emails, API keys) never leave MCP boundaries.
 
 ---
 
-## 13. Rules
+## 13. Development Rules & Best Practices
 
-- Use PNPM
-- don't create Icon from Scratch 
-- Always use Theme Colors from Tailwind, dont use Tailwind Color classes
+**Package Management:**
+- ✅ Always use PNPM (not npm or yarn)
+- ✅ Install latest tags unless alpha is specifically requested
+
+**Code Style:**
+- ✅ Don't create icons from scratch - use Lucide icons
+- ✅ Always use Theme Colors from Tailwind config
+- ✅ DON'T use hardcoded Tailwind color classes (e.g., `text-blue-500`)
+- ✅ Use semantic color names: `text-primary`, `bg-secondary`, `text-destructive`
+
+**UI/UX:**
+- ✅ NEVER use browser `alert()` - always use toast notifications (Sonner)
+- ✅ NEVER use browser `confirm()` - use Shadcn AlertDialog
+- ✅ NEVER use browser `prompt()` - use Shadcn Dialog with Input
+- ✅ Always use Shadcn components when available
+- ✅ Document component purpose at top of file
+
+**Supabase Integration:**
+- ✅ Server components: `import { createClient } from '@/lib/supabase/server'`
+- ✅ Client components: `import { createClient } from '@/lib/supabase/client'`
+- ✅ Mark client components with `'use client'` directive
+- ✅ Never expose sensitive data in client components
+
+**File Structure:**
+- `/app` - Next.js pages and API routes
+- `/components` - Reusable UI components
+- `/lib` - Utilities, services, helpers
+- `/mastra` - Mastra agent implementations
+- `/types` - TypeScript type definitions
+- `/constants` - App-wide constants
+
+**API Routes:**
+- Use `/app/api` directory for API endpoints
+- Always validate input and handle errors
+- Return structured JSON responses
+- Use Supabase server client for auth
 
 ---
 
-This `AGENT.md` defines the operational behavior, dependencies, and data responsibilities of all AI agents within the EduMatch platform, enabling Codex to orchestrate them efficiently using **OpenAI’s Agent Builder**, **AI SDK**, and **MCP toolchain**.
-- Please don't use alert api of the browser. always use shadcn components as much as you can.
+This `CLAUDE.md` defines the operational behavior, dependencies, and data responsibilities of all AI agents within the EduMatch platform, enabling development with **Mastra Framework**, **AI SDK**, **Supabase MCP**, and **Shadcn UI**.

@@ -38,12 +38,15 @@ import {
   usePromptInputController,
 } from '@/components/ai-elements/prompt-input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
-import { MessageSquareIcon } from 'lucide-react';
+import { MessageSquareIcon, CheckCircle2, Flag } from 'lucide-react';
 import CorrectionMessage from '@/components/chat/CorrectionMessage';
 import type { GrammarIssue } from '@/components/chat/GrammarIssueDetail';
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 interface SoloPracticeSession {
   id: string;
@@ -73,19 +76,10 @@ type PracticeMessage = UIMessage & {
   messageType?: 'text' | 'correction' | 'encouragement' | 'topic_redirect';
   grammarIssues?: GrammarIssue[];
   correctionSeverity?: 'minor' | 'moderate' | 'major';
+  isCorrect?: boolean; // Added to indicate grammatically correct messages
 };
 
 type TextPart = { type: 'text'; text: string };
-
-type TextPracticeMessageRow = {
-  id: string;
-  role: PracticeMessage['role'];
-  content: string;
-  created_at: string | null;
-  message_type: PracticeMessage['messageType'] | null;
-  grammar_issues: GrammarIssue[] | null;
-  correction_severity: PracticeMessage['correctionSeverity'] | null;
-};
 
 const isTextPart = (part: unknown): part is TextPart => {
   return (
@@ -195,6 +189,7 @@ export default function SoloPracticeChatInterface({
             messageType: msg.message_type || 'text',
             grammarIssues: msg.grammar_issues || undefined,
             correctionSeverity: msg.correction_severity || undefined,
+            isCorrect: msg.is_correct || false,
           }));
           console.log('[DEBUG] Converted messages:', msgs);
           setInitialMessages(msgs);
@@ -237,8 +232,10 @@ function ChatInterface({
   initialMessages,
 }: SoloPracticeChatInterfaceProps & { initialMessages: PracticeMessage[] }) {
   const supabase = createClient();
+  const router = useRouter();
   const [realtimeMessages, setRealtimeMessages] = useState<PracticeMessage[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
 
   const chat = useChat<PracticeMessage>({
     id: sessionId,
@@ -287,6 +284,7 @@ function ChatInterface({
             messageType: newMsg.message_type || 'text',
             grammarIssues: newMsg.grammar_issues,
             correctionSeverity: newMsg.correction_severity,
+            isCorrect: newMsg.is_correct || false,
           };
 
           setRealtimeMessages((prev) => {
@@ -378,6 +376,35 @@ function ChatInterface({
 
   const visibleMessageCount = visibleMessages.length;
   const messageLabel = visibleMessageCount === 1 ? 'message' : 'messages';
+
+  // Handle finishing the session
+  const handleFinishSession = async () => {
+    setIsFinishing(true);
+
+    try {
+      // Update session status to completed
+      const { error } = await supabase
+        .from('text_practice_sessions')
+        .update({
+          status: 'archived',
+          ended_at: new Date().toISOString(),
+        })
+        .eq('id', sessionId);
+
+      if (error) throw error;
+
+      toast.success('Session completed!', {
+        description: 'Your practice session has been saved.',
+      });
+
+      // Redirect to practice page
+      router.push('/practice');
+    } catch (error) {
+      console.error('Error finishing session:', error);
+      toast.error('Failed to finish session. Please try again.');
+      setIsFinishing(false);
+    }
+  };
   const isStreaming = status === 'streaming' || status === 'submitted';
 
   const handlePromptSubmit = async ({ text }: PromptInputMessage) => {
@@ -496,8 +523,20 @@ function ChatInterface({
             </div>
           </div>
 
-          <div className="text-muted-foreground text-sm">
-            {visibleMessageCount} {messageLabel}
+          <div className="flex items-center gap-3">
+            <div className="text-muted-foreground text-sm">
+              {visibleMessageCount} {messageLabel}
+            </div>
+            <Button
+              onClick={handleFinishSession}
+              disabled={isFinishing || visibleMessageCount < 3}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <Flag className="w-4 h-4" />
+              Finish Session
+            </Button>
           </div>
         </div>
       </header>
@@ -529,7 +568,7 @@ function ChatInterface({
                   <div className="flex max-w-3xl flex-col gap-1">
                     <MessageContent
                       className={cn(
-                        'w-fit max-w-xl whitespace-pre-wrap wrap-break-word leading-relaxed text-sm',
+                        'w-fit max-w-xl whitespace-pre-wrap wrap-break-word leading-relaxed text-sm relative',
                         isAssistant ? 'self-start' : 'self-end',
                         isCorrection && 'bg-transparent p-0'
                       )}
@@ -551,7 +590,12 @@ function ChatInterface({
                           <Response>{messageText}</Response>
                         )
                       ) : (
-                        <p>{messageText}</p>
+                        <div className="flex items-start gap-2">
+                          <p className="flex-1">{messageText}</p>
+                          {message.isCorrect && (
+                            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                          )}
+                        </div>
                       )}
                     </MessageContent>
                     <span

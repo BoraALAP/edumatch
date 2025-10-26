@@ -15,8 +15,8 @@ import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { aiService } from '@/lib/ai';
 
-// Cooldown to prevent over-correction (only correct every 2-3 messages)
-const CORRECTION_COOLDOWN_MESSAGES = 2;
+// Check every message for errors but manage correction frequency
+const CORRECTION_COOLDOWN_MESSAGES = 1; // Check every message
 const lastCorrectionIndex = new Map<string, number>();
 
 export async function POST(request: NextRequest) {
@@ -40,49 +40,71 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
-    // Check cooldown - don't correct every single message
-    const lastCorrected = lastCorrectionIndex.get(sessionId) ?? -999;
-    const messagesSinceLastCorrection = messageIndex - lastCorrected;
-
-    if (messagesSinceLastCorrection < CORRECTION_COOLDOWN_MESSAGES) {
-      return NextResponse.json({
-        success: true,
-        shouldCorrect: false,
-        reason: 'cooldown',
-        messagesUntilNextCorrection: CORRECTION_COOLDOWN_MESSAGES - messagesSinceLastCorrection
-      });
-    }
-
-    // Analyze grammar using AI service
+    // Analyze grammar using AI service - check EVERY message
     const grammarAnalysis = await aiService.checkGrammar(message, studentLevel);
 
     console.log('[Grammar Analysis] Full analysis result:', JSON.stringify(grammarAnalysis, null, 2));
 
-    // Only create correction if there are moderate or major issues
-    const significantIssues = grammarAnalysis.issues.filter(
-      issue => issue.severity === 'moderate' || issue.severity === 'major'
-    );
+    // Show ALL issues to help students learn (including minor ones)
+    const allIssues = grammarAnalysis.issues;
 
-    console.log('[Grammar Analysis] Significant issues:', significantIssues.length, 'out of', grammarAnalysis.issues.length, 'total');
+    console.log('[Grammar Analysis] Total issues found:', allIssues.length);
 
-    if (!grammarAnalysis.hasIssues || significantIssues.length === 0) {
+    // If no issues, mark the message as correct with a checkmark
+    if (!grammarAnalysis.hasIssues || allIssues.length === 0) {
+      // Update the user message to mark it as correct
+      await supabase
+        .from('text_practice_messages')
+        .update({
+          grammar_issues: [],
+          has_correction: false,
+          is_correct: true, // Add this flag to indicate the message is grammatically correct
+        })
+        .eq('id', userMessageId);
+
       return NextResponse.json({
         success: true,
         shouldCorrect: false,
-        reason: 'no_significant_issues',
-        analysis: grammarAnalysis
+        reason: 'no_issues_found',
+        analysis: grammarAnalysis,
+        isCorrect: true
+      });
+    }
+
+    // Check cooldown for showing corrections (but we still analyzed the message above)
+    const lastCorrected = lastCorrectionIndex.get(sessionId) ?? -999;
+    const messagesSinceLastCorrection = messageIndex - lastCorrected;
+
+    if (messagesSinceLastCorrection < CORRECTION_COOLDOWN_MESSAGES) {
+      // Store the issues but don't show correction yet
+      await supabase
+        .from('text_practice_messages')
+        .update({
+          grammar_issues: allIssues,
+          has_correction: false,
+          is_correct: false,
+        })
+        .eq('id', userMessageId);
+
+      return NextResponse.json({
+        success: true,
+        shouldCorrect: false,
+        reason: 'cooldown',
+        messagesUntilNextCorrection: CORRECTION_COOLDOWN_MESSAGES - messagesSinceLastCorrection,
+        hasIssues: true,
+        issues: allIssues
       });
     }
 
     // Determine the primary correction category and severity
-    const primaryIssue = significantIssues[0];
+    const primaryIssue = allIssues[0];
     const correctionCategory = categorizeSent(primaryIssue);
-    const overallSeverity = getOverallSeverity(significantIssues);
+    const overallSeverity = getOverallSeverity(allIssues);
 
     // Generate a friendly correction message
     const correctionMessage = await generateCorrectionMessage(
       message,
-      significantIssues
+      allIssues
     );
 
     // Store the correction in the database
@@ -94,7 +116,7 @@ export async function POST(request: NextRequest) {
         content: correctionMessage,
         message_type: 'correction',
         corrected_message_id: userMessageId,
-        grammar_issues: significantIssues,
+        grammar_issues: allIssues,
         ai_correction: grammarAnalysis.overallFeedback || correctionMessage,
         correction_type: correctionCategory,
         correction_severity: overallSeverity,
@@ -105,7 +127,7 @@ export async function POST(request: NextRequest) {
           grammar_focus: grammarFocus,
           analysis_timestamp: new Date().toISOString(),
           total_issues_found: grammarAnalysis.issues.length,
-          significant_issues: significantIssues.length
+          shown_issues: allIssues.length
         }
       })
       .select()
@@ -133,7 +155,7 @@ export async function POST(request: NextRequest) {
         message: correctionMessage,
         category: correctionCategory,
         severity: overallSeverity,
-        issues: significantIssues,
+        issues: allIssues,
       }
     });
 

@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import type { Database } from '@/types/database.types';
+import { toast } from 'sonner';
 
 interface Profile {
   id: string;
@@ -205,10 +206,12 @@ export default function MatchingInterface({ userId, userProfile }: MatchingInter
       if (error) throw error;
 
       // Show success message
-      alert(`Match request sent to ${matchedProfile.display_name || matchedProfile.full_name}.\nThey'll need to accept before chat opens.`);
+      toast.success('Match request sent!', {
+        description: `${matchedProfile.display_name || matchedProfile.full_name} will need to accept before chat opens.`
+      });
     } catch (error) {
       console.error('Error creating match:', error);
-      alert('Failed to create match. Please try again.');
+      toast.error('Failed to create match. Please try again.');
     } finally {
       setIsMatching(false);
     }

@@ -494,14 +494,33 @@ export async function endVoiceServerSession(sessionId: string): Promise<void> {
     // Update session status in database
     const supabase = await createClient();
     const now = new Date().toISOString();
-    await supabase
+
+    // Check current session status - don't mark as completed if it's paused
+    const { data: currentSession } = await supabase
       .from('voice_practice_sessions')
-      .update({
-        status: 'completed',
-        ended_at: now,
-        last_activity_at: now,
-      })
-      .eq('id', session.voicePracticeSessionId);
+      .select('status')
+      .eq('id', session.voicePracticeSessionId)
+      .single();
+
+    // Only mark as completed if it was active/ending, not if it was paused
+    if (currentSession?.status !== 'paused') {
+      await supabase
+        .from('voice_practice_sessions')
+        .update({
+          status: 'completed',
+          ended_at: now,
+          last_activity_at: now,
+        })
+        .eq('id', session.voicePracticeSessionId);
+    } else {
+      // If paused, just update last activity time
+      await supabase
+        .from('voice_practice_sessions')
+        .update({
+          last_activity_at: now,
+        })
+        .eq('id', session.voicePracticeSessionId);
+    }
 
     session.voice.close();
   } finally {

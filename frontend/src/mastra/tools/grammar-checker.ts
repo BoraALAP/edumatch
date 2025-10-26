@@ -22,15 +22,13 @@ export const grammarCheckerTool = {
     try {
       const result = await aiService.checkGrammar(text, studentLevel);
 
-      // Filter for moderate and major issues only
-      const significantIssues = result.issues.filter(
-        issue => issue.severity === 'moderate' || issue.severity === 'major'
-      );
+      // Show ALL issues to help students learn (including minor ones)
+      const allIssues = result.issues;
 
       return {
-        hasIssues: significantIssues.length > 0,
-        issueCount: significantIssues.length,
-        issues: significantIssues.map(issue => ({
+        hasIssues: allIssues.length > 0,
+        issueCount: allIssues.length,
+        issues: allIssues.map(issue => ({
           type: issue.type || 'grammar',
           severity: issue.severity,
           original: issue.original,

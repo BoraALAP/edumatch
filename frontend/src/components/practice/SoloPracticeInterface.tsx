@@ -59,6 +59,25 @@ export default function SoloPracticeInterface({
       }
 
       if (session) {
+        // Create initial AI greeting message
+        const greetingMessages = [
+          `Hi! I'm your AI conversation coach. I'm excited to practice talking about ${topic} with you today. What would you like to discuss?`,
+          `Hello! Let's have a conversation about ${topic}. What interests you most about this topic?`,
+          `Hey there! Ready to practice? Let's talk about ${topic}. What's on your mind?`,
+          `Hi! I'm here to help you practice your conversation skills. Let's explore ${topic} together. What would you like to share?`,
+        ];
+
+        const randomGreeting = greetingMessages[Math.floor(Math.random() * greetingMessages.length)];
+
+        await supabase
+          .from('text_practice_messages')
+          .insert({
+            session_id: session.id,
+            role: 'assistant',
+            content: randomGreeting,
+            message_type: 'text',
+          });
+
         // Redirect to the dedicated solo practice chat page
         window.location.href = `/practice/${session.id}`;
       }

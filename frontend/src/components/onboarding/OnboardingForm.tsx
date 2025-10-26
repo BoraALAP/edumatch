@@ -21,11 +21,11 @@ import { createClient } from '@/lib/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Upload, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Stepper, { Step } from '@/components//StepperCard';
 import { SelectionButton } from '@/components/ui/selection-button';
+import { AvatarUpload } from '@/components/ui/avatar-upload';
 import {
   LANGUAGE_LEVELS,
   TOPICS_AND_INTERESTS,
@@ -86,34 +86,15 @@ export default function OnboardingForm({ userId, invitationToken }: OnboardingFo
     }
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File size must be less than 5MB');
-        e.target.value = ''; // Reset input
-        return;
-      }
+  const handleAvatarSelect = (file: File) => {
+    setAvatarFile(file);
 
-      // Validate file type
-      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        toast.error('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
-        e.target.value = ''; // Reset input
-        return;
-      }
-
-      setAvatarFile(file);
-
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-      toast.success('Avatar uploaded successfully');
-    }
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   // Validation for current step
@@ -433,36 +414,12 @@ export default function OnboardingForm({ userId, invitationToken }: OnboardingFo
 
             <div className="space-y-6">
               {/* Avatar Upload */}
-              <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                  <Avatar className="w-24 h-24">
-                    <AvatarImage src={avatarPreview || undefined} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-2xl">
-                      {firstName && lastName
-                        ? `${firstName[0]}${lastName[0]}`.toUpperCase()
-                        : <Upload className="w-8 h-8" />
-                      }
-                    </AvatarFallback>
-                  </Avatar>
-                  <label
-                    htmlFor="avatar-upload"
-                    className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-2 cursor-pointer hover:bg-primary/90 transition-colors"
-                  >
-                    <Upload className="w-4 h-4" />
-                  </label>
-                  <input
-                    id="avatar-upload"
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    onChange={handleAvatarChange}
-                    className="hidden"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  Upload a profile picture (optional)<br />
-                  Max 5MB • JPG, PNG, GIF, or WebP
-                </p>
-              </div>
+              <AvatarUpload
+                previewUrl={avatarPreview}
+                initials={firstName && lastName ? `${firstName[0]}${lastName[0]}`.toUpperCase() : undefined}
+                onFileSelect={handleAvatarSelect}
+                size="lg"
+              />
 
               {/* First Name and Last Name */}
               <div className="grid grid-cols-2 gap-4">

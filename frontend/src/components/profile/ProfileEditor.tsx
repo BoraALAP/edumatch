@@ -29,7 +29,8 @@ import {
   FieldGroup,
 } from '@/components/ui/field';
 import { useRouter } from 'next/navigation';
-import { TOPICS_AND_INTERESTS, LANGUAGE_LEVELS } from '@/constants/onboarding';
+import { TOPICS_AND_INTERESTS, LANGUAGE_LEVELS, LEARNING_GOALS } from '@/constants/onboarding';
+import { toast } from 'sonner';
 
 interface Profile {
   id: string;
@@ -37,6 +38,7 @@ interface Profile {
   display_name: string | null;
   proficiency_level: string | null;
   interests: string[] | null;
+  learning_goals: string[] | null;
   bio: string | null;
   age: number | null;
   avatar_url: string | null;
@@ -77,6 +79,7 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
   const [displayName, setDisplayName] = useState(profile.display_name || '');
   const [proficiencyLevel, setProficiencyLevel] = useState(profile.proficiency_level || '');
   const [selectedInterests, setSelectedInterests] = useState<string[]>(profile.interests || []);
+  const [learningGoals, setLearningGoals] = useState<string[]>(profile.learning_goals || []);
   const [bio, setBio] = useState(profile.bio || '');
   const [age, setAge] = useState(profile.age?.toString() || '');
 
@@ -110,17 +113,31 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
     }
   };
 
+  const toggleLearningGoal = (goal: string) => {
+    if (learningGoals.includes(goal)) {
+      setLearningGoals(learningGoals.filter((g) => g !== goal));
+    } else {
+      if (learningGoals.length < 3) {
+        setLearningGoals([...learningGoals, goal]);
+      }
+    }
+  };
+
   const handleSave = async () => {
     if (!bio.trim()) {
-      alert('Please write a bio');
+      toast.error('Please write a bio');
       return;
     }
     if (selectedInterests.length < 3) {
-      alert('Please select at least 3 interests');
+      toast.error('Please select at least 3 interests');
+      return;
+    }
+    if (learningGoals.length < 1) {
+      toast.error('Please select at least 1 learning goal');
       return;
     }
     if (!age || parseInt(age) < 13 || parseInt(age) > 100) {
-      alert('Please enter a valid age (13-100)');
+      toast.error('Please enter a valid age (13-100)');
       return;
     }
 
@@ -133,6 +150,7 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
           display_name: displayName.trim(),
           proficiency_level: proficiencyLevel,
           interests: selectedInterests,
+          learning_goals: learningGoals,
           bio: bio.trim(),
           age: parseInt(age),
           updated_at: new Date().toISOString(),
@@ -142,10 +160,11 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
       if (error) throw error;
 
       setIsEditing(false);
+      toast.success('Profile updated successfully!');
       router.refresh();
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile. Please try again.');
+      toast.error('Failed to update profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -156,6 +175,7 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
     setDisplayName(profile.display_name || '');
     setProficiencyLevel(profile.proficiency_level || '');
     setSelectedInterests(profile.interests || []);
+    setLearningGoals(profile.learning_goals || []);
     setBio(profile.bio || '');
     setAge(profile.age?.toString() || '');
     setIsEditing(false);
@@ -170,7 +190,9 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
       if (error) throw error;
 
       if (data?.success) {
-        alert('Successfully converted to individual account! Your seat has been freed and you now have access to the global matching pool.');
+        toast.success('Successfully converted to individual account!', {
+          description: 'Your seat has been freed and you now have access to the global matching pool.'
+        });
         router.push('/dashboard');
         router.refresh();
       } else {
@@ -178,7 +200,9 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
       }
     } catch (error) {
       console.error('Error converting to individual:', error);
-      alert(`Failed to convert to individual account: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error('Failed to convert to individual account', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
     } finally {
       setIsConverting(false);
       setShowConversionDialog(false);
@@ -189,13 +213,8 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
     const newValue = !profile.allow_global_matching;
 
     if (newValue) {
-      const confirmed = confirm(
-        'Enable global matching?\n\n' +
-        'This will allow you to be matched with individual learners from outside your school. ' +
-        'You will remain invisible in public searches but can be paired for practice sessions.\n\n' +
-        'You can disable this at any time from your profile settings.'
-      );
-      if (!confirmed) return;
+      // For now, proceed without confirmation. In the future, we can add a proper dialog component
+      // if user wants confirmation before enabling global matching
     }
 
     setIsTogglingMatching(true);
@@ -211,11 +230,13 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
 
       if (error) throw error;
 
-      alert(`Global matching ${newValue ? 'enabled' : 'disabled'} successfully!`);
+      toast.success(`Global matching ${newValue ? 'enabled' : 'disabled'} successfully!`);
       router.refresh();
     } catch (error) {
       console.error('Error toggling global matching:', error);
-      alert(`Failed to update: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error('Failed to update', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
     } finally {
       setIsTogglingMatching(false);
     }
@@ -298,6 +319,21 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
                 )}
               </div>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-2">Learning Goals</label>
+              <div className="flex flex-wrap gap-2">
+                {profile.learning_goals && profile.learning_goals.length > 0 ? (
+                  profile.learning_goals.map((goal) => (
+                    <Badge key={goal} variant="secondary">
+                      {goal}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-muted-foreground">No learning goals selected</p>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           // Edit Mode
@@ -371,6 +407,27 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
               </div>
               <FieldDescription>
                 Selected: {selectedInterests.length}/5
+              </FieldDescription>
+            </Field>
+
+            <Field>
+              <FieldLabel>Learning Goals (select 1-3)</FieldLabel>
+              <FieldDescription>
+                What do you want to improve? These help us personalize your experience
+              </FieldDescription>
+              <div className="grid grid-cols-1 gap-2">
+                {LEARNING_GOALS.map((goal) => (
+                  <SelectionButton
+                    key={goal}
+                    label={goal}
+                    onClick={() => toggleLearningGoal(goal)}
+                    disabled={!learningGoals.includes(goal) && learningGoals.length >= 3}
+                    isSelected={learningGoals.includes(goal)}
+                  />
+                ))}
+              </div>
+              <FieldDescription>
+                Selected: {learningGoals.length}/3
               </FieldDescription>
             </Field>
 

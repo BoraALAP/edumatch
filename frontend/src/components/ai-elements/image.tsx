@@ -7,8 +7,8 @@ import type { Experimental_GeneratedImage } from "ai";
 export type ImageProps = Experimental_GeneratedImage & {
   className?: string;
   alt?: string;
-  width: any;
-  height: any;
+  width: number;
+  height: number;
 };
 
 const toBase64 = (array?: Uint8Array) => {

@@ -137,7 +137,6 @@ export default function VoicePracticeSession({
   const [corrections, setCorrections] = useState<GrammarCorrection[]>([]);
   const [isLoadingCorrections, setIsLoadingCorrections] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   const audioBufferRef = useRef<ArrayBuffer[]>([]);
   const commitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -441,8 +440,6 @@ export default function VoicePracticeSession({
         }
       } catch (error) {
         console.error('[Voice Session] Error loading conversation history:', error);
-      } finally {
-        setIsLoadingHistory(false);
       }
     };
 
