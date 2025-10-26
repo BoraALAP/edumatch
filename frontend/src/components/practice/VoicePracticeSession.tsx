@@ -788,14 +788,7 @@ export default function VoicePracticeSession({
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden bg-background relative">
-        {/* Threads Visual Background */}
-        <div className="absolute inset-0 opacity-20 pointer-events-none">
-          <Threads
-            amplitude={1}
-            distance={0}
-            enableMouseInteraction={false}
-          />
-        </div>
+
 
         <div className="max-w-5xl mx-auto h-full flex flex-col p-4 gap-4 relative z-10">
           {/* Error Display */}
@@ -882,8 +875,8 @@ export default function VoicePracticeSession({
                             correction.severity === 'major'
                               ? 'destructive'
                               : correction.severity === 'moderate'
-                              ? 'default'
-                              : 'secondary'
+                                ? 'default'
+                                : 'secondary'
                           }
                           className="text-xs"
                         >
@@ -916,6 +909,15 @@ export default function VoicePracticeSession({
               </div>
             </Card>
           )}
+
+          {/* Threads Visual Background */}
+          <Card className="h-[50vh]  ">
+            <Threads
+              amplitude={3}
+              distance={0.5}
+              enableMouseInteraction={true}
+            />
+          </Card>
 
           {/* Voice Controls */}
           <Card className="p-6 shrink-0">
