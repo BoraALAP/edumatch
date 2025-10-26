@@ -28,6 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import Threads from '@/components/Threads';
 
 interface VoicePracticeInterfaceProps {
   profile: Profile;
@@ -155,6 +156,15 @@ export default function VoicePracticeInterface({
           </div>
         </Card>
       )}
+
+      {/* Threads Visual Background */}
+      <div style={{ width: '100%', height: '400px', position: 'relative' }}>
+        <Threads
+          amplitude={1}
+          distance={0}
+          enableMouseInteraction={true}
+        />
+      </div>
 
       {/* Voice Speaker Selection */}
       <Card className="p-6">
