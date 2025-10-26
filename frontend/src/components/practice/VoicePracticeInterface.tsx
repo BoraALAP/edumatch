@@ -70,7 +70,25 @@ export default function VoicePracticeInterface({
     setSelectedTopic(topic);
 
     try {
-      // Create a voice_practice_sessions record
+      // Check for existing active session with this topic
+      const { data: existingSession } = await supabase
+        .from('voice_practice_sessions')
+        .select('*')
+        .eq('student_id', profile.id)
+        .eq('topic', topic)
+        .eq('status', 'active')
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingSession) {
+        // Resume existing session
+        console.log('[Voice Practice] Resuming existing active session:', existingSession.id);
+        window.location.href = `/voice-practice/${existingSession.id}`;
+        return;
+      }
+
+      // Create a new voice_practice_sessions record
       const { data: session, error: sessionError } = await supabase
         .from('voice_practice_sessions')
         .insert({
@@ -94,6 +112,7 @@ export default function VoicePracticeInterface({
 
       if (session) {
         // Redirect to the voice practice session page
+        console.log('[Voice Practice] Created new session:', session.id);
         window.location.href = `/voice-practice/${session.id}`;
       }
     } catch (error) {

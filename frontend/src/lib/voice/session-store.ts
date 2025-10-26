@@ -6,7 +6,7 @@
  * the browser and OpenAI without exposing credentials.
  *
  * Features:
- * - Proper Mastra API usage with updateSession() for VAD configuration
+ * - Proper Mastra API usage with updateConfig() for VAD configuration
  * - Database writes for all transcripts, audio chunks, and events
  * - Correction generation and storage
  * - Session lifecycle management
@@ -31,8 +31,6 @@ interface VoiceSessionRecord {
   queue: VoiceEvent[];
   createdAt: number;
   status: 'active' | 'ended';
-  pendingAssistantText: string;
-  pendingUserText: string;
   transcriptSequence: number;
   audioSequence: number;
   turnId: string | null;
@@ -148,6 +146,46 @@ async function saveAudioChunk(
   }
 }
 
+/**
+ * Parse AI corrections from assistant message and save to database
+ */
+async function parseAndSaveCorrection(
+  text: string,
+  sessionId: string,
+  studentId: string
+): Promise<void> {
+  // Patterns to detect corrections in AI responses
+  const correctionPatterns = [
+    /(?:just a (?:quick|small) (?:tip|correction)|correction):\s*we'?d?\s+say\s+"([^"]+)"/i,
+    /(?:just a (?:quick|small) (?:tip|correction)|correction):\s*it'?s?\s+"([^"]+)"/i,
+    /should be\s+"([^"]+)"/i,
+    /better to say\s+"([^"]+)"/i,
+  ];
+
+  for (const pattern of correctionPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      try {
+        // Call the voice analysis API to store the correction
+        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/practice/analyze-voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            studentId,
+            transcript: text,
+          }),
+        });
+
+        console.log('[Voice Session] AI correction detected and saved:', match[1]);
+      } catch (error) {
+        console.error('[Voice Session] Failed to save correction:', error);
+      }
+      break; // Only process first correction found
+    }
+  }
+}
+
 export function consumeVoiceEvents(sessionId: string): VoiceEvent[] {
   console.log('[Voice Session] consumeVoiceEvents called', {
     sessionId,
@@ -179,8 +217,33 @@ export async function createVoiceServerSession(input: {
   const voiceSessionId = randomUUID();
 
   try {
+    // Load previous conversation history if session is being resumed
+    console.log('[Voice Session] Loading conversation history...');
+    const supabase = await createClient();
+
+    const { data: previousTranscripts } = await supabase
+      .from('voice_practice_transcripts')
+      .select('role, text, timestamp')
+      .eq('session_id', input.voicePracticeSessionId)
+      .order('sequence_number', { ascending: true })
+      .limit(50); // Last 50 messages for context
+
+    let conversationHistory = '';
+    if (previousTranscripts && previousTranscripts.length > 0) {
+      console.log('[Voice Session] Found', previousTranscripts.length, 'previous messages');
+      conversationHistory = previousTranscripts
+        .map((t) => `${t.role === 'user' ? 'Student' : 'Coach'}: ${t.text}`)
+        .join('\n');
+    }
+
+    // Add conversation history to context
+    const contextWithHistory = {
+      ...input.context,
+      conversationHistory: conversationHistory || undefined,
+    };
+
     console.log('[Voice Session] Creating agent...');
-    const agent = createSoloVoiceAgent(input.context);
+    const agent = createSoloVoiceAgent(contextWithHistory);
     const voice = agent.voice as OpenAIRealtimeVoice;
 
     // Connect to OpenAI Realtime API
@@ -191,21 +254,20 @@ export async function createVoiceServerSession(input: {
       voicePracticeSessionId: input.voicePracticeSessionId,
     });
 
-    // Configure session with VAD and proper settings
-    console.log('[Voice Session] Configuring session with VAD...');
+    // Configure VAD for better interruption and voice detection
+    console.log('[Voice Session] Configuring VAD and transcription settings...');
     voice.updateConfig({
-      modalities: ['text', 'audio'],
-      voice: input.context.voiceSpeaker || 'alloy',
       turn_detection: {
         type: 'server_vad',
         threshold: 0.5,
         prefix_padding_ms: 300,
-        silence_duration_ms: 800,
+        silence_duration_ms: 1000,
       },
-      temperature: 0.8,
-      max_response_output_tokens: 4096,
+      input_audio_transcription: {
+        model: 'whisper-1',
+      },
     });
-    console.log('[Voice Session] Session configured with VAD successfully', { voiceSessionId });
+    console.log('[Voice Session] VAD and transcription configured');
 
   const record: VoiceSessionRecord = {
     id: voiceSessionId,
@@ -216,99 +278,49 @@ export async function createVoiceServerSession(input: {
     queue: [],
     createdAt: Date.now(),
     status: 'active',
-    pendingAssistantText: '',
-    pendingUserText: '',
     transcriptSequence: 0,
     audioSequence: 0,
     turnId: null,
   };
 
-  // Set up event listeners
+  // Set up event listeners - simplified to match Mastra docs
   voice.on('writing', async (payload: { text: string; role: 'assistant' | 'user' }) => {
     const { text, role } = payload;
-    const timestamp = Date.now();
 
+    // Skip empty text
+    if (!text || !text.trim()) {
+      return;
+    }
+
+    console.log(`[Voice Session] ${role} said:`, text);
+
+    // Increment sequence for each message
+    record.transcriptSequence += 1;
+
+    if (role === 'user') {
+      record.turnId = randomUUID(); // Start new turn
+    }
+
+    // Save transcript to database
+    await saveTranscript(
+      voiceSessionId,
+      input.voicePracticeSessionId,
+      role,
+      text.trim(),
+      record.transcriptSequence,
+      record.turnId
+    );
+
+    // Parse and save AI corrections if this is an assistant message
     if (role === 'assistant') {
-      // Assistant transcript delta
-      if (text === '\n') {
-        const completed = record.pendingAssistantText.trim();
-        if (completed) {
-          record.transcriptSequence += 1;
-          pushEvent(record, {
-            type: 'assistant_text_complete',
-            text: completed,
-            timestamp,
-          });
-
-          // Save to database
-          await saveTranscript(
-            voiceSessionId,
-            input.voicePracticeSessionId,
-            'assistant',
-            completed,
-            record.transcriptSequence,
-            record.turnId
-          );
-
-          await saveEvent(input.voicePracticeSessionId, 'transcript_received', {
-            role: 'assistant',
-            textLength: completed.length,
-          });
-
-          console.log('[Voice Session] Assistant text complete', {
-            voiceSessionId,
-            sequence: record.transcriptSequence,
-          });
-        }
-        record.pendingAssistantText = '';
-        record.turnId = null; // End of turn
-        return;
-      }
-
-      record.pendingAssistantText += text;
-      pushEvent(record, { type: 'assistant_text_delta', text, timestamp });
-      return;
+      await parseAndSaveCorrection(text, input.voicePracticeSessionId, input.studentId);
+      record.turnId = null; // End of turn after assistant responds
     }
 
-    // User transcript
-    if (text === '\n') {
-      const completed = record.pendingUserText.trim();
-      if (completed) {
-        record.transcriptSequence += 1;
-        record.turnId = randomUUID(); // Start new turn
-
-        pushEvent(record, {
-          type: 'user_text_complete',
-          text: completed,
-          timestamp,
-        });
-
-        // Save to database
-        await saveTranscript(
-          voiceSessionId,
-          input.voicePracticeSessionId,
-          'user',
-          completed,
-          record.transcriptSequence,
-          record.turnId
-        );
-
-        await saveEvent(input.voicePracticeSessionId, 'transcript_received', {
-          role: 'user',
-          textLength: completed.length,
-        });
-
-        console.log('[Voice Session] User text complete', {
-          voiceSessionId,
-          sequence: record.transcriptSequence,
-        });
-      }
-      record.pendingUserText = '';
-      return;
-    }
-
-    record.pendingUserText += text;
-    pushEvent(record, { type: 'user_text_delta', text, timestamp });
+    await saveEvent(input.voicePracticeSessionId, 'transcript_received', {
+      role,
+      textLength: text.length,
+    });
   });
 
   console.log('[Voice Session] Setting up event listeners...');
@@ -359,6 +371,21 @@ export async function createVoiceServerSession(input: {
     });
   });
 
+  // Listen for conversation interruptions (when user interrupts AI)
+  voice.on('openAIRealtime:conversation.interrupted', () => {
+    console.log('[Voice Session] Conversation interrupted by user', { voiceSessionId });
+
+    // Signal to client that AI was interrupted
+    pushEvent(record, {
+      type: 'assistant_audio_complete',
+      timestamp: Date.now()
+    });
+
+    void saveEvent(input.voicePracticeSessionId, 'conversation_interrupted', {
+      timestamp: Date.now(),
+    });
+  });
+
   console.log('[Voice Session] Event listeners set up successfully');
 
   sessions.set(voiceSessionId, record);
@@ -374,7 +401,6 @@ export async function createVoiceServerSession(input: {
   });
 
   // Update database session with provider session ID
-  const supabase = await createClient();
   await supabase
     .from('voice_practice_sessions')
     .update({
@@ -385,10 +411,13 @@ export async function createVoiceServerSession(input: {
 
   console.log('[Voice Session] Database updated with session ID');
 
-  const greeting = generateVoiceStarterPrompt({
-    topic: input.context.topic,
-    learningGoals: input.context.learningGoals,
-  });
+  // Generate appropriate greeting based on whether this is a new or resumed session
+  const greeting = conversationHistory
+    ? `Welcome back! I remember we were talking about "${input.context.topic}". Would you like to continue where we left off, or should we explore something new about this topic?`
+    : generateVoiceStarterPrompt({
+        topic: input.context.topic,
+        learningGoals: input.context.learningGoals,
+      });
 
   console.log('[Voice Session] Sending greeting:', greeting);
   await voice.speak(greeting);

@@ -63,11 +63,11 @@ export function useAudioCapture(options: AudioCaptureOptions = {}) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate,
-          echoCancellation,
-          noiseSuppression,
-          autoGainControl,
-          channelCount: 1, // Mono
+          sampleRate: { ideal: sampleRate },
+          echoCancellation: { ideal: echoCancellation },
+          noiseSuppression: { ideal: noiseSuppression },
+          autoGainControl: { ideal: autoGainControl },
+          channelCount: { ideal: 1 }, // Mono
         },
       });
 

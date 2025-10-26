@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,8 +67,8 @@ export default function MatchRequestsPanel({
   const handleRespond = async (matchId: string, action: MatchResponseAction) => {
     const statusMap: Record<MatchResponseAction, string> = {
       accept: 'active',
-      decline: 'declined',
-      ignore: 'ignored',
+      decline: 'cancelled',
+      ignore: 'cancelled',
     };
 
     setIsProcessing((prev) => ({ ...prev, [matchId]: action }));
@@ -85,7 +86,7 @@ export default function MatchRequestsPanel({
 
       if (error) {
         console.error('Failed to update match status', error);
-        alert('Something went wrong while responding to the match request.');
+        toast.error('Something went wrong while responding to the match request.');
         return;
       }
 
@@ -99,7 +100,7 @@ export default function MatchRequestsPanel({
       router.refresh();
     } catch (error) {
       console.error('Unexpected error responding to match', error);
-      alert('Failed to update match. Please try again.');
+      toast.error('Failed to update match. Please try again.');
     } finally {
       setIsProcessing((prev) => ({ ...prev, [matchId]: null }));
     }

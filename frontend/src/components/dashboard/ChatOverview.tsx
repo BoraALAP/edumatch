@@ -35,8 +35,8 @@ interface ChatOverviewProps {
 }
 
 const statusCategories = {
-  active: ['active'] as MatchStatus[],
-  archived: ['ended', 'cancelled'] as MatchStatus[],
+  active: ['active', 'pending'] as MatchStatus[],
+  archived: ['completed', 'cancelled'] as MatchStatus[],
 };
 
 const formatDate = (value: string | null) =>

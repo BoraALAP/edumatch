@@ -3,12 +3,11 @@
  *
  * Purpose: Real-time voice conversation interface with AI coach
  * Features:
- * - Real-time voice conversation using OpenAI Realtime API
+ * - Real-time voice conversation using OpenAI Realtime API via Mastra
  * - Audio capture and playback
- * - Live transcript display
- * - Background speech analysis (silent accumulation)
- * - Session summary modal with accumulated corrections
  * - Voice waveform visualization
+ * - Backend transcript and correction storage
+ * - Session summary modal with accumulated analytics
  */
 
 'use client';
@@ -24,7 +23,7 @@ import { useAudioCapture } from '@/hooks/useAudioCapture';
 import { createClient } from '@/lib/supabase/client';
 import type { VoiceEvent } from '@/lib/voice/types';
 import SessionSummaryModal from '@/components/practice/SessionSummaryModal';
-import { Mic, Phone, Loader2, MessageSquare, Volume2 } from 'lucide-react';
+import { Mic, Phone, Loader2, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -69,11 +68,10 @@ interface GrammarCorrection {
   severity: 'minor' | 'moderate' | 'major';
 }
 
-interface TranscriptMessage {
-  id: string;
+interface ConversationMessage {
   role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
+  text: string;
+  timestamp: string;
 }
 
 type SessionState = 'ready' | 'active' | 'paused' | 'ending' | 'ended';
@@ -132,15 +130,15 @@ export default function VoicePracticeSession({
   useEffect(() => {
     sessionStateRef.current = sessionState;
   }, [sessionState]);
-  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [corrections, setCorrections] = useState<GrammarCorrection[]>([]);
   const [isLoadingCorrections, setIsLoadingCorrections] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
   const audioBufferRef = useRef<ArrayBuffer[]>([]);
   const commitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voiceSessionIdRef = useRef<string | null>(null);
@@ -259,38 +257,7 @@ export default function VoicePracticeSession({
     [ensureAudioContext]
   );
 
-  const analyzeUserSpeech = useCallback(
-    async (transcriptValue: string) => {
-      try {
-        const response = await fetch('/api/practice/analyze-voice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: session.id,
-            studentId: session.student_id,
-            transcript: transcriptValue,
-            studentLevel: session.proficiency_level || profile.proficiency_level,
-            learningGoals: session.learning_goals || [],
-            grammarFocus: session.grammar_focus || [],
-          }),
-        });
-
-        const result = await response.json();
-        console.log('[Voice Analysis] Silent analysis completed:', result);
-      } catch (err) {
-        console.error('[Voice Analysis] Error:', err);
-      }
-    },
-    [
-      session.id,
-      session.student_id,
-      session.proficiency_level,
-      session.learning_goals,
-      session.grammar_focus,
-      profile.proficiency_level,
-    ]
-  );
-
+  // Simplified event handler - transcript and corrections now handled by backend
   const handleVoiceEvents = useCallback(
     (events: VoiceEvent[]) => {
       if (!events.length) {
@@ -299,92 +266,6 @@ export default function VoicePracticeSession({
 
       events.forEach((event) => {
         switch (event.type) {
-          case 'assistant_text_delta':
-            setTranscript((prev) => {
-              const last = prev[prev.length - 1];
-              if (last && last.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  {
-                    ...last,
-                    content: last.content + event.text,
-                  },
-                ];
-              }
-
-              return [
-                ...prev,
-                {
-                  id: `${Date.now()}-assistant`,
-                  role: 'assistant',
-                  content: event.text,
-                  timestamp: new Date(event.timestamp),
-                },
-              ];
-            });
-            break;
-
-          case 'assistant_text_complete':
-            setTranscript((prev) => {
-              const last = prev[prev.length - 1];
-              if (last && last.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  {
-                    ...last,
-                    content: event.text,
-                  },
-                ];
-              }
-              return prev;
-            });
-            break;
-
-          case 'user_text_delta':
-            setTranscript((prev) => {
-              const last = prev[prev.length - 1];
-              if (last && last.role === 'user') {
-                return [
-                  ...prev.slice(0, -1),
-                  {
-                    ...last,
-                    content: last.content + event.text,
-                  },
-                ];
-              }
-
-              return [
-                ...prev,
-                {
-                  id: `${Date.now()}-user`,
-                  role: 'user',
-                  content: event.text,
-                  timestamp: new Date(event.timestamp),
-                },
-              ];
-            });
-            break;
-
-          case 'user_text_complete':
-            setTranscript((prev) => {
-              const last = prev[prev.length - 1];
-              if (last && last.role === 'user') {
-                return [
-                  ...prev.slice(0, -1),
-                  {
-                    ...last,
-                    content: event.text,
-                  },
-                ];
-              }
-              return prev;
-            });
-
-            if (event.text.trim().length > 0) {
-              void analyzeUserSpeech(event.text);
-            }
-            break;
-
           case 'assistant_audio_chunk':
             setIsAISpeaking(true);
             void playAssistantAudio(event.audioBase64);
@@ -397,12 +278,14 @@ export default function VoicePracticeSession({
           case 'error':
             setError(event.message);
             break;
+
           default:
+            // All transcript and correction events are now handled server-side
             break;
         }
       });
     },
-    [analyzeUserSpeech, playAssistantAudio]
+    [playAssistantAudio]
   );
 
   const pollVoiceEvents = useCallback(async () => {
@@ -521,10 +404,6 @@ export default function VoicePracticeSession({
     },
   });
 
-  // Auto-scroll transcript
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript]);
   useEffect(() => {
     if (sessionState !== 'ended') {
       setShowSummaryModal(false);
@@ -542,6 +421,33 @@ export default function VoicePracticeSession({
       console.log('[Voice Session] Browser microphone permission confirmed');
     }
   }, [hasPermission]);
+
+  // Load conversation history on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const { data: transcripts, error } = await supabase
+          .from('voice_practice_transcripts')
+          .select('role, text, timestamp')
+          .eq('session_id', session.id)
+          .order('sequence_number', { ascending: true })
+          .limit(100); // Load last 100 messages
+
+        if (error) {
+          console.error('[Voice Session] Failed to load conversation history:', error);
+        } else if (transcripts && transcripts.length > 0) {
+          console.log('[Voice Session] Loaded', transcripts.length, 'previous messages');
+          setConversationHistory(transcripts as ConversationMessage[]);
+        }
+      } catch (error) {
+        console.error('[Voice Session] Error loading conversation history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    void loadHistory();
+  }, [session.id, supabase]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -601,7 +507,6 @@ export default function VoicePracticeSession({
         const data = (await response.json()) as { voiceSessionId: string; greeting?: string };
         console.log('[Voice Session] Session created successfully:', data);
 
-        setTranscript([]);
         setIsAISpeaking(false);
         audioBufferRef.current = [];
         if (audioContextRef.current) {
@@ -893,12 +798,51 @@ export default function VoicePracticeSession({
             </Card>
           )}
 
+          {/* Conversation History (if exists) */}
+          {conversationHistory.length > 0 && (
+            <Card className="p-4 bg-muted/30 border-muted">
+              <details className="group">
+                <summary className="flex items-center justify-between cursor-pointer list-none">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="font-medium text-sm text-foreground">
+                      Previous Conversation ({conversationHistory.length} messages)
+                    </h3>
+                  </div>
+                  <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+                    ▼
+                  </span>
+                </summary>
+                <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+                  {conversationHistory.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={cn(
+                        'text-sm p-2 rounded',
+                        msg.role === 'user'
+                          ? 'bg-primary/10 text-foreground ml-8'
+                          : 'bg-muted text-foreground mr-8'
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-xs">
+                          {msg.role === 'user' ? 'You:' : 'Coach:'}
+                        </span>
+                        <span className="flex-1">{msg.text}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </Card>
+          )}
+
           {/* Corrections Display (when paused) */}
           {isPaused && (
             <Card className="p-6 bg-primary/5 border-primary/20">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-primary" />
+                  <Mic className="w-5 h-5 text-primary" />
                   <h3 className="font-semibold text-foreground">Grammar Feedback</h3>
                 </div>
                 {isLoadingCorrections && (
@@ -965,62 +909,6 @@ export default function VoicePracticeSession({
               </div>
             </Card>
           )}
-
-          {/* Transcript */}
-          <Card className="flex-1 overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-border bg-muted/30">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-primary" />
-                <h2 className="text-sm font-semibold text-foreground">Conversation</h2>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {transcript.length} {transcript.length === 1 ? 'message' : 'messages'}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {transcript.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-center">
-                  <div>
-                    <Volume2 className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground text-sm">
-                      {isReady
-                        ? 'Click "Start Conversation" to begin speaking with your AI coach'
-                        : 'Start speaking to see the conversation here'}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                transcript.map((message) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      'flex',
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'max-w-[70%] rounded-lg p-3',
-                        message.role === 'user'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-foreground'
-                      )}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {message.timestamp.toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={transcriptEndRef} />
-            </div>
-          </Card>
 
           {/* Voice Controls */}
           <Card className="p-6 shrink-0">

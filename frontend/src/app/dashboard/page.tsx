@@ -181,7 +181,7 @@ export default async function DashboardPage() {
   // Convert text practice sessions to summaries
   const textSessionSummaries = (textSessions ?? []).map((session) => ({
     id: session.id,
-    status: (session.status === 'active' ? 'active' : session.status === 'completed' ? 'ended' : 'cancelled') as MatchStatus,
+    status: (session.status === 'active' ? 'active' : session.status === 'completed' ? 'completed' : 'cancelled') as MatchStatus,
     updated_at: session.updated_at || session.created_at,
     matched_interests: [session.topic],
     partner: {
@@ -197,7 +197,7 @@ export default async function DashboardPage() {
   // Convert voice practice sessions to summaries
   const voiceSessionSummaries = (voiceSessions ?? []).map((session) => ({
     id: session.id,
-    status: (session.status === 'active' ? 'active' : session.status === 'completed' ? 'ended' : 'cancelled') as MatchStatus,
+    status: (session.status === 'active' ? 'active' : session.status === 'completed' ? 'completed' : 'cancelled') as MatchStatus,
     updated_at: session.updated_at || session.created_at,
     matched_interests: [session.topic],
     partner: {
