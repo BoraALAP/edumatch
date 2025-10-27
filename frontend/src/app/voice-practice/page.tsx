@@ -11,7 +11,8 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import VoicePracticeInterface from '@/components/practice/VoicePracticeInterface';
+import VoicePracticeInterface from './sections/voice-practice-interface';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export default async function VoicePracticePage() {
   const supabase = await createClient();
@@ -37,25 +38,14 @@ export default async function VoicePracticePage() {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Voice Practice</h1>
-              <p className="text-sm text-muted-foreground">
-                Practice speaking with your AI voice coach
-              </p>
-            </div>
-            <a href="/dashboard" className="text-primary hover:text-primary/90">
-              ← Back to Dashboard
-            </a>
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        title="Voice Practice"
+        subtitle="Practice speaking with your AI voice coach"
+        backHref="/dashboard"
+        maxWidth="5xl"
+      />
 
-      {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-5xl mx-auto pt-30 px-4 sm:px-6 lg:px-8 py-8">
         <VoicePracticeInterface profile={profile} />
       </main>
     </div>

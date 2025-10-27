@@ -63,7 +63,7 @@ export default async function HomePage() {
 
       </div>
 
-      <main className="mx-auto pt-24 flex max-w-7xl flex-col gap-24 bg-background/40 px-4 pb-24 sm:px-6 lg:px-8 relative">
+      <main className="mx-auto pt-30 flex max-w-7xl flex-col gap-24 bg-background/40 px-4 pb-24 sm:px-6 lg:px-8 relative">
         <section className="   grid items-center gap-16 ">
           <div className="space-y-10 z-20 py-24  text-center ">
             <span className="mx-auto inline-flex items-center justify-center rounded-full bg-primary/15 px-4 py-1 text-sm font-medium text-primary lg:mx-0">

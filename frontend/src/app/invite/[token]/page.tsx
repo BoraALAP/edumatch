@@ -49,7 +49,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     }
 
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-4 py-16">
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center pt-30 px-4 py-16">
         <Card className="w-full space-y-6 p-8 text-center">
           <h1 className="text-2xl font-semibold text-foreground">Invitation not available</h1>
           <p className="text-sm text-muted-foreground">{message}</p>
@@ -68,7 +68,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   const showAcceptForm = !invitation.isExpired && invitation.status === 'pending' && !requiresLogin;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-4 py-16">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center pt-30 px-4 py-16">
       <Card className="w-full space-y-6 p-8">
         <header className="space-y-2 text-center">
           <p className="text-sm font-medium text-muted-foreground">Invitation to join</p>

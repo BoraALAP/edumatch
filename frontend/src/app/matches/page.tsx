@@ -9,6 +9,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import MatchingInterface from '@/components/matching/MatchingInterface';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export default async function MatchesPage() {
   const supabase = await createClient();
@@ -32,20 +33,14 @@ export default async function MatchesPage() {
 
   return (
     <div className="min-h-screen ">
-      {/* Header */}
-      <header className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-foreground">Find Practice Partners</h1>
-            <a href="/dashboard" className="text-primary hover:text-primary/90">
-              ← Back to Dashboard
-            </a>
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        title="Find Practice Partners"
+        subtitle="Swipe to connect with students who share your interests"
+        backHref="/dashboard"
+        maxWidth="4xl"
+      />
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto pt-30 px-4 sm:px-6 lg:px-8 py-8">
         <MatchingInterface userId={user.id} userProfile={profile} />
       </main>
     </div>

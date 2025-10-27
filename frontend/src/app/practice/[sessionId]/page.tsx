@@ -7,7 +7,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import SoloPracticeChatInterface from '@/components/practice/SoloPracticeChatInterface';
+import SoloPracticeChat from './sections/solo-practice-chat';
 
 interface PracticeSessionPageProps {
   params: Promise<{
@@ -60,7 +60,7 @@ export default async function PracticeSessionPage({ params }: PracticeSessionPag
 
   return (
     <div className="h-screen flex flex-col bg-background">
-      <SoloPracticeChatInterface
+      <SoloPracticeChat
         sessionId={sessionId}
         session={session}
         profile={profile}

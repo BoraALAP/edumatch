@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { SelectionButton } from '@/components/ui/selection-button';
+import { AvatarUpload } from '@/components/ui/avatar-upload';
 import {
   Field,
   FieldLabel,
@@ -82,6 +83,8 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
   const [learningGoals, setLearningGoals] = useState<string[]>(profile.learning_goals || []);
   const [bio, setBio] = useState(profile.bio || '');
   const [age, setAge] = useState(profile.age?.toString() || '');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatar_url);
 
   // Check if user can convert to individual
   const canConvertToIndividual = profile.school_id && profile.role !== 'school_admin';
@@ -123,6 +126,17 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
     }
   };
 
+  const handleAvatarSelect = (file: File) => {
+    setAvatarFile(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = async () => {
     if (!bio.trim()) {
       toast.error('Please write a bio');
@@ -144,6 +158,34 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
     setIsSaving(true);
 
     try {
+      let avatarUrl = profile.avatar_url;
+
+      // Upload new avatar if provided
+      if (avatarFile) {
+        toast.loading('Uploading avatar...');
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, avatarFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        toast.dismiss();
+
+        if (uploadError) {
+          console.error('Avatar upload error:', uploadError);
+          toast.error('Failed to upload avatar');
+          throw new Error('Failed to upload avatar');
+        }
+
+        // Get the public URL
+        const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+        avatarUrl = data.publicUrl;
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -153,6 +195,7 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
           learning_goals: learningGoals,
           bio: bio.trim(),
           age: parseInt(age),
+          avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
@@ -160,6 +203,7 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
       if (error) throw error;
 
       setIsEditing(false);
+      setAvatarFile(null);
       toast.success('Profile updated successfully!');
       router.refresh();
     } catch (error) {
@@ -178,6 +222,8 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
     setLearningGoals(profile.learning_goals || []);
     setBio(profile.bio || '');
     setAge(profile.age?.toString() || '');
+    setAvatarFile(null);
+    setAvatarPreview(profile.avatar_url);
     setIsEditing(false);
   };
 
@@ -244,39 +290,39 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
 
   return (
     <div className="space-y-6">
-      {/* Profile Header */}
-      <Card className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-3xl font-bold">
-              {profile.avatar_url ? (
-                <Image
-                  src={profile.avatar_url}
-                  alt={profile.display_name || 'Profile'}
-                  width={80}
-                  height={80}
-                  className="w-full h-full rounded-full object-cover"
-                  unoptimized
-                />
-              ) : (
-                (profile.display_name || profile.full_name || 'U')[0].toUpperCase()
-              )}
+      {/* Profile Header - Hidden when editing */}
+      {!isEditing && (
+        <Card className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground text-3xl font-bold">
+                {profile.avatar_url ? (
+                  <Image
+                    src={profile.avatar_url}
+                    alt={profile.display_name || 'Profile'}
+                    width={80}
+                    height={80}
+                    className="w-full h-full rounded-full object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  (profile.display_name || profile.full_name || 'U')[0].toUpperCase()
+                )}
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">
+                  {profile.display_name || profile.full_name || 'User'}
+                </h2>
+                <p className="text-muted-foreground">{user.email}</p>
+                <Badge variant="secondary" className="mt-2">
+                  {profile.proficiency_level || 'N/A'}
+                </Badge>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-foreground">
-                {profile.display_name || profile.full_name || 'User'}
-              </h2>
-              <p className="text-muted-foreground">{user.email}</p>
-              <Badge variant="secondary" className="mt-2">
-                {profile.proficiency_level || 'N/A'}
-              </Badge>
-            </div>
-          </div>
-          {!isEditing && (
             <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
-          )}
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
 
       {/* Profile Details */}
       <Card className="p-6">
@@ -338,6 +384,23 @@ export default function ProfileEditor({ profile, user }: ProfileEditorProps) {
         ) : (
           // Edit Mode
           <FieldGroup>
+            <Field>
+              <FieldLabel>Profile Picture</FieldLabel>
+              <FieldDescription>Upload a profile picture or keep your current one</FieldDescription>
+              <AvatarUpload
+                previewUrl={avatarPreview}
+                initials={
+                  profile.display_name
+                    ? profile.display_name[0].toUpperCase()
+                    : profile.full_name
+                      ? profile.full_name[0].toUpperCase()
+                      : 'U'
+                }
+                onFileSelect={handleAvatarSelect}
+                size="lg"
+              />
+            </Field>
+
             <Field>
               <FieldLabel>Display Name</FieldLabel>
               <Input

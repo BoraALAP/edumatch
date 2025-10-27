@@ -1,40 +1,46 @@
 /**
  * Correction Message Component
  *
- * Reusable component for displaying AI language corrections in both peer chat and solo practice.
- * Shows correction messages with special styling and optional detailed error breakdowns.
+ * Purpose: Reusable component for displaying AI language corrections in both peer chat and solo practice
+ * Design: Modern card-based interface with before/after comparisons
  *
- * Handles all types of language errors:
+ * Features:
+ * - "Tips" badge with issue count
+ * - Friendly encouragement messages
+ * - Expandable detailed error cards with before/after split layout
+ * - Severity-based visual indicators (minor/moderate/major)
+ * - Streaming AI content support via Response component
+ * - Two variants: default (full) and compact (inline)
+ *
+ * Handles all error types:
  * - Grammar (tense, articles, subject-verb, prepositions, etc.)
  * - Vocabulary (word choice, inappropriate words)
  * - Spelling (misspelled words)
  * - Idioms (unnatural phrasing)
  * - Punctuation (major errors)
  *
- * Features:
- * - "Grammar Tip" badge with severity indicator
- * - Color-coded by severity (minor/moderate/major)
- * - Expandable detailed error list with before/after comparisons
- * - Works with AI SDK Response component for streaming
- * - Two variants: default (full) and compact (inline)
- * - Consistent UX across chat types
+ * Used by:
+ * - /app/practice/[sessionId]/sections/solo-practice-chat.tsx
+ * - /components/chat/ChatInterface.tsx
+ * - /app/chat/[matchId]/sections/peer-chat-interface.tsx
  */
 
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Response } from '@/components/ai-elements/response';
-import { Badge } from '@/components/ui/badge';
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
-import GrammarIssueDetail, { type GrammarIssue } from './GrammarIssueDetail';
-import { cn } from '@/lib/utils';
+import { useState } from "react";
+import { Response } from "@/components/ai-elements/response";
+import { Badge } from "@/components/ui/badge";
+import { ChevronDownIcon, ChevronUpIcon, Lightbulb } from "lucide-react";
+import GrammarIssueDetail from "./GrammarIssueDetail";
+import { cn } from "@/lib/utils";
+import type { GrammarIssue, GrammarSeverity } from "@/lib/chat/types";
 
 interface CorrectionMessageProps {
   content: string;
   grammarIssues?: GrammarIssue[];
-  severity?: 'minor' | 'moderate' | 'major';
+  severity?: "minor" | "moderate" | "major";
   showDetails?: boolean;
-  variant?: 'default' | 'compact';
+  variant?: "default" | "compact";
 }
 
 export default function CorrectionMessage({
@@ -42,115 +48,48 @@ export default function CorrectionMessage({
   grammarIssues,
   severity,
   showDetails = true,
-  variant = 'default',
+  variant = "default",
 }: CorrectionMessageProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasDetailedIssues = grammarIssues && grammarIssues.length > 0;
+  const issueCount = grammarIssues?.length || 0;
 
-  const severityColors = {
-    minor: 'from-blue-100/50 to-blue-50/50 dark:from-blue-950/20 dark:to-blue-900/10',
-    moderate: 'from-amber-100/50 to-amber-50/50 dark:from-amber-950/20 dark:to-amber-900/10',
-    major: 'from-red-100/50 to-red-50/50 dark:from-red-950/20 dark:to-red-900/10',
-  };
 
-  const gradientClass = severity ? severityColors[severity] : severityColors.moderate;
 
-  if (variant === 'compact') {
-    return (
-      <div className="space-y-2 px-2">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs bg-amber-100/50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100 border-amber-200 dark:border-amber-800">
-            💡 Grammar Tip
-          </Badge>
-        </div>
-        <div className="text-sm">
-          <Response>{content}</Response>
-        </div>
-        {hasDetailedIssues && (
-          <div className="space-y-1.5 pl-2 border-l-2 border-amber-300 dark:border-amber-700">
-            {grammarIssues.map((issue, index) => (
-              <GrammarIssueDetail
-                key={index}
-                issue={issue}
-                compact
-                showCategory={false}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  // Default variant - full design with expandable cards
   return (
     <div className="space-y-3 p-2">
-      {/* Header Badge */}
-      <div className="flex items-center gap-2">
-        <Badge
-          variant="outline"
-          className={cn(
-            "text-xs font-medium",
-            "bg-amber-100/50 text-amber-900 border-amber-200",
-            "dark:bg-amber-900/20 dark:text-amber-100 dark:border-amber-800"
-          )}
-        >
-          💡 Grammar Tip
-          {severity && (
-            <span className="ml-1.5 opacity-75">
-              ({severity})
-            </span>
-          )}
-        </Badge>
-        {hasDetailedIssues && showDetails && (
-          <Badge variant="secondary" className="text-xs">
-            {grammarIssues.length} {grammarIssues.length === 1 ? 'issue' : 'issues'}
-          </Badge>
-        )}
-      </div>
+      {/* Header Section */}
+      <div className="space-y-2">
+        {/* Tips Badge with Issue Count */}
+        <div className="flex items-center gap-2">
+          <div
+            className="flex items-center justify-center gap-2"
+          >
+            <Lightbulb className="size-4 " />
+            Tips
+            {hasDetailedIssues && (
+              <span className="ml-1.5 opacity-75">
+                ({issueCount} {issueCount === 1 ? "issue" : "issues"})
+              </span>
+            )}
+          </div>
+        </div>
 
-      {/* Main Correction Message */}
-      <div className={cn(
-        "rounded-lg p-3 bg-linear-to-br",
-        gradientClass,
-        "border border-amber-200 dark:border-amber-800/50"
-      )}>
-        <Response>{content}</Response>
+        {/* Encouragement Message */}
+        <div className="rounded-lg  p-3">
+          <Response>{content}</Response>
+        </div>
       </div>
 
       {/* Detailed Issues (Expandable) */}
       {hasDetailedIssues && showDetails && (
         <div className="space-y-2">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className={cn(
-              "flex items-center gap-1.5 text-xs font-medium text-muted-foreground",
-              "hover:text-foreground transition-colors"
-            )}
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUpIcon className="size-3.5" />
-                Hide details
-              </>
-            ) : (
-              <>
-                <ChevronDownIcon className="size-3.5" />
-                Show details
-              </>
-            )}
-          </button>
-
-          {isExpanded && (
-            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-              {grammarIssues.map((issue, index) => (
-                <GrammarIssueDetail
-                  key={index}
-                  issue={issue}
-                  showCategory
-                />
-              ))}
-            </div>
-          )}
+          <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200 flex gap-4 flex-wrap ">
+            {grammarIssues.map((issue, index) => (
+              <GrammarIssueDetail key={index} issue={issue} showCategory />
+            ))}
+          </div>
         </div>
       )}
     </div>

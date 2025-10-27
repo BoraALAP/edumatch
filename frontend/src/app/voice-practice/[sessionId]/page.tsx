@@ -11,7 +11,7 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import VoicePracticeSession from '@/components/practice/VoicePracticeSession';
+import VoiceSessionUI from './voice-session-ui';
 
 interface PageProps {
   params: Promise<{ sessionId: string }>;
@@ -55,7 +55,7 @@ export default async function VoicePracticeSessionPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <VoicePracticeSession session={session} profile={profile} />
+      <VoiceSessionUI session={session} profile={profile} />
     </div>
   );
 }
